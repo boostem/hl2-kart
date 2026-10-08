@@ -1,3 +1,38 @@
+# HL2 Kart
+
+HL2 Kart is a kart-racing mod built on the Source SDK 2013 multiplayer code (HL2:DM base).
+
+## Build (Linux)
+
+```sh
+cd src && ./buildallprojects
+```
+
+## Run
+
+Steam must be running and signed in.
+
+```sh
+cd game && ./mod_hl2mp_linux64
+```
+
+Playtest launch line:
+
+```sh
+cd game && ./mod_hl2mp_linux64 -windowed -w 1600 -h 900 -novid +sv_cheats 1 +map dm_lockdown
+```
+
+## Asset policy
+
+- Use existing Source content first, referenced by path. Never copy Valve files into the repo.
+- Agent-built models are made with Blender scripts under `assets_src/`.
+- Otherwise use CC0/CC-BY assets, with a line in `CREDITS.md`.
+- Ask before using anything NC, ND, SA or with an unclear license.
+
+See `assets_src/README.md`, `CREDITS.md` and `docs/README.md`.
+
+---
+
 # Source SDK 2013
 
 Source code for Source SDK 2013.
