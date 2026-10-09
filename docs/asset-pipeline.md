@@ -232,3 +232,39 @@ layout in the script, regenerate the VMF, compile, and commit all three. The VMF
    F kart_finish (# hazard-stripe line)   G kart_start 2x4 grid   D deathmatch spawns
    1-5 kart_checkpoint (c cone at each end)   c cones   b, B barriers   L lampposts
 ```
+
+### Main menu background (`kart_bg`)
+
+`assets_src/maps/kart_bg.vmf` is written by `assets_src/maps/kart_bg.py` (standard library only, reusing
+`kart_arena.py`'s brush and VMF writer): a 3072 x 3072 dirt yard under `sky_wasteland02`, with low dirt banks along
+its edges, one corner of track (a quarter circle of radius 512 to 1024 with straight run-offs), tyre walls round the
+outside, barriers and cones on the inside, a lamppost with a `light_spot`, a low warm `light_environment`, and the
+racer kart (`models/kart/kart_racer.mdl`) on a non-solid `prop_dynamic` mid corner.
+
+- The `info_player_deathmatch` is the camera. On a background map the player doesn't get a kart: it becomes a fixed
+  spectator at the spawn point's origin and angles, with the HUD and the message of the day hidden
+  (`CHL2MP_Player::Spawn`, `FinishClientPutInServer`). Move the camera there, not with a `point_viewcontrol`.
+- `scripts/ChapterBackgrounds.txt` names it, and `cfg/valve.rc` runs `startupmenu`, which loads it when the game
+  starts without `+map` (HL2MP's own `valve.rc` doesn't).
+- While it loads, the menu shows `materials/console/kart_bg_widescreen` (and `console/kart_bg` on 4:3 screens): a
+  still of the scene. After changing the map, take a new one and convert it:
+
+  ```sh
+  cd game && ./mod_hl2mp_linux64 -windowed -w 1600 -h 900 -novid +map_background kart_bg +wait 3000 \
+      +sv_cheats 1 +r_drawvgui 0 +wait 60 +screenshot +wait 60 +quit
+  # mod_hl2mp/screenshots/kart_bg0000.tga -> assets_src/textures/kart_bg.png (1024 x 576), then
+  # a 1024 x 512 resize -> img2vtf.py ... console/kart_bg_widescreen --type vgui
+  # a centred 4:3 crop at 1024 x 1024 -> img2vtf.py ... console/kart_bg --type vgui
+  ```
+
+  and drop `$translucent` from the two VMTs (the stills are opaque).
+
+### Main menu logo and entries
+
+- `assets_src/textures/make_logo.py` draws `assets_src/textures/logo.png` (1024 x 256, transparent; the letters are
+  polygons, so no font is needed). Convert with
+  `tools/venv/bin/python tools/img2vtf.py assets_src/textures/logo.png console/logo --type vgui`.
+- `gameinfo.txt` has `gamelogo 1` and an empty `title`, so the menu shows `resource/GameLogo.res` (an `ImagePanel`
+  with `../console/logo`, 480 x 120) above its entries instead of the title text.
+- `resource/GameMenu.res` lists the entries: HL2MP's, plus **Quick race** (`disconnect; maxplayers 8; map
+  kart_arena`, a local 8-player server so there is room for bots).

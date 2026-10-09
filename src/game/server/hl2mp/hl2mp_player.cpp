@@ -524,6 +524,17 @@ void CHL2MP_Player::Spawn(void)
 
 	m_impactEnergyScale = HL2MPPLAYER_PHYSDAMAGE_SCALE;
 
+	// The main menu's background map (ChapterBackgrounds.txt): no kart and no HUD,
+	// just a still view from the map's spawn point: its origin is the camera.
+	if ( gpGlobals->eLoadType == MapLoad_Background && !IsObserver() )
+	{
+		SetViewOffset( vec3_origin );
+		m_bEnterObserver = true;
+		StartObserverMode( OBS_MODE_FIXED );
+		m_Local.m_iHideHUD = HIDEHUD_ALL;
+		return;
+	}
+
 	// Karts are also held on the grid during the countdown and at the results.
 	if ( HL2MPRules()->IsIntermission() || ( IsInKart() && HL2MPRules()->IsKartRaceFrozen() ) )
 	{
