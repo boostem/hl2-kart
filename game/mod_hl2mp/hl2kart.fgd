@@ -1,0 +1,37 @@
+//=============================================================================
+// hl2kart.fgd - Hammer entity definitions for the kart racing mod.
+//
+// Includes the stock hl2mp FGD (hl2mp.fgd, which itself includes halflife2.fgd),
+// so both must sit in the same folder as this file (the SDK's bin folder).
+// Keep this file in sync with src/game/server/hl2mp/kart_race_entities.cpp:
+// every keyvalue, input and output in the code must be listed here.
+//=============================================================================
+
+@include "hl2mp.fgd"
+
+@PointClass base(Targetname) color(255 160 0) iconsprite("editor/logic_auto.vmt") = kart_race_manager :
+	"Race settings and events. Place exactly one per track map; extra ones are removed at load."
+[
+	laps(integer) : "Laps" : 3 : "Number of laps in a race (minimum 1)."
+	track_name(string) : "Track name" : "" : "Display name of the track."
+
+	output OnRaceStart(void) : "Fired when the race starts."
+	output OnRaceFinish(void) : "Fired when the race ends."
+]
+
+@PointClass base(Targetname, Angles) studio("models/buggy.mdl") size(-32 -32 0, 32 32 48) color(0 200 0) = kart_start :
+	"One starting grid slot. Place 8 in a 2x4 grid, 96 units apart. Karts spawn on the lowest free grid number. The arrow shows the facing (yaw) of the kart."
+[
+	grid(integer) : "Grid slot" : 0 : "Grid position, lowest first (0 is pole). Karts take the lowest slot that is free."
+]
+
+@SolidClass base(Trigger) color(0 128 255) = kart_checkpoint :
+	"Checkpoint trigger, passed by karts in 'Checkpoint index' order, after kart_finish (index 0). Make it span the whole track width (wall to wall, including any shortcut it guards) and tall enough that a kart cannot jump over it. Place one about every 1500 units and before and after every shortcut."
+[
+	index(integer) : "Checkpoint index" : -1 : "Order along the track: 1 is the first one after the finish line, then 2, 3, and so on up to the last one before the finish line. Indexes must be unique and without gaps."
+]
+
+@SolidClass base(Trigger) color(255 0 128) = kart_finish :
+	"The start/finish line. Always checkpoint 0 (its index is set automatically). Make it span the whole track width and be tall. Place exactly one."
+[
+]
