@@ -74,6 +74,7 @@ BEGIN_SEND_TABLE_NOBASE( CHL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 	SendPropFloat( SENDINFO( m_flKartHopTime ), -1, SPROP_NOSCALE ),
 	SendPropFloat( SENDINFO( m_flKartDriftCharge ), -1, SPROP_NOSCALE ),
 	SendPropFloat( SENDINFO( m_flKartBoostScale ), -1, SPROP_NOSCALE ),
+	SendPropVector( SENDINFO( m_vecKartGroundNormal ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
 
 END_SEND_TABLE()
 
@@ -89,6 +90,7 @@ BEGIN_SEND_TABLE_NOBASE( CHL2MP_Player, DT_HL2MPNonLocalPlayerExclusive )
 	// lo-res kart state for other players: enough to draw their kart
 	SendPropFloat( SENDINFO( m_flKartSpeed ), 12, SPROP_CHANGES_OFTEN, KART_NET_SPEED_MIN, KART_NET_SPEED_MAX ),
 	SendPropAngle( SENDINFO( m_flKartYaw ), 13, SPROP_CHANGES_OFTEN ),
+	SendPropVector( SENDINFO( m_vecKartGroundNormal ), 8, SPROP_CHANGES_OFTEN, -1.0f, 1.0f ),
 
 END_SEND_TABLE()
 
@@ -214,6 +216,7 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_nKartDriftTier = 0;
 	m_flKartBoostEndTime = 0.0f;
 	m_flKartBoostScale = 1.0f;
+	m_vecKartGroundNormal.Init( 0.0f, 0.0f, 1.0f );
 	m_flKartRespawnUnfreezeTime = 0.0f;
 	m_flKartNextRespawnCommand = 0.0f;
 
@@ -767,6 +770,7 @@ void CHL2MP_Player::ResetKartMovement( float flYaw )
 	m_nKartDriftTier = 0;
 	m_flKartBoostEndTime = 0.0f;
 	m_flKartBoostScale = 1.0f;
+	m_vecKartGroundNormal.Init( 0.0f, 0.0f, 1.0f );
 	m_bKartWrongWay = false;
 	m_flKartWrongWayTime = 0.0f;
 }

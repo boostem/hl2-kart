@@ -250,6 +250,9 @@ private:
 	int		m_nKartDriftTier;	// mini-turbo tier the charge has reached, 0-3
 	float	m_flKartBoostEndTime;	// time the current boost ends, in the past when not boosting
 	float	m_flKartBoostScale;	// kart_max_speed multiplier of the current boost
+	Vector	m_vecKartGroundNormal;	// normal of the ground under the kart, (0,0,1) in the air
+	Vector	m_vecKartTiltNormal;	// m_vecKartGroundNormal smoothed for drawing, see kart_tilt_smooth
+	float	m_flKartTiltTime;		// client time m_vecKartTiltNormal was last smoothed
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
 
 	// Kart race state, from the server's race manager.

@@ -230,6 +230,7 @@ private:
 	CNetworkVar( int, m_nKartDriftTier );		// mini-turbo tier the charge has reached, 0-3
 	CNetworkVar( float, m_flKartBoostEndTime );	// time the current boost ends, in the past when not boosting
 	CNetworkVar( float, m_flKartBoostScale );	// kart_max_speed multiplier of the current boost
+	CNetworkVector( m_vecKartGroundNormal );	// normal of the ground under the kart, (0,0,1) in the air
 
 	// Kart race state. Only the race manager and the race flow change it.
 	friend class CKartRaceManager;

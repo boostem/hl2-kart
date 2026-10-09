@@ -60,6 +60,7 @@ ConVar kart_boost_fov_kick( "kart_boost_fov_kick", "12", FCVAR_ARCHIVE, "Degrees
 ConVar kart_boost_cam_pullback( "kart_boost_cam_pullback", "30", FCVAR_ARCHIVE, "Units the kart chase camera pulls back while boosting." );
 ConVar kart_boost_cam_blend( "kart_boost_cam_blend", "0.2", FCVAR_ARCHIVE, "Seconds the boost FOV kick and pull-back take to ease in and out." );
 ConVar kart_boost_fx( "kart_boost_fx", "1", FCVAR_ARCHIVE, "Draw the boost exhaust flame and mini-turbo drift sparks on karts." );
+ConVar kart_tilt_smooth( "kart_tilt_smooth", "10", FCVAR_ARCHIVE, "How quickly a kart's model pitches and rolls to the ground under it. Higher is snappier, 0 draws karts level." );
 
 CLIENTEFFECT_REGISTER_BEGIN( PrecacheKartBoostFX )
 CLIENTEFFECT_MATERIAL( "sprites/glow01" )
@@ -90,6 +91,7 @@ BEGIN_RECV_TABLE_NOBASE( C_HL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 	RecvPropFloat( RECVINFO( m_flKartHopTime ) ),
 	RecvPropFloat( RECVINFO( m_flKartDriftCharge ) ),
 	RecvPropFloat( RECVINFO( m_flKartBoostScale ) ),
+	RecvPropVector( RECVINFO( m_vecKartGroundNormal ) ),
 END_RECV_TABLE()
 
 // all players except the local player
@@ -102,6 +104,7 @@ BEGIN_RECV_TABLE_NOBASE( C_HL2MP_Player, DT_HL2MPNonLocalPlayerExclusive )
 
 	RecvPropFloat( RECVINFO( m_flKartSpeed ) ),
 	RecvPropFloat( RECVINFO( m_flKartYaw ) ),
+	RecvPropVector( RECVINFO( m_vecKartGroundNormal ) ),
 END_RECV_TABLE()
 
 IMPLEMENT_CLIENTCLASS_DT(C_HL2MP_Player, DT_HL2MP_Player, CHL2MP_Player)
@@ -154,6 +157,7 @@ BEGIN_PREDICTION_DATA( C_HL2MP_Player )
 	DEFINE_PRED_FIELD( m_nKartDriftTier, FIELD_INTEGER, FTYPEDESC_INSENDTABLE ),
 	DEFINE_PRED_FIELD_TOL( m_flKartBoostEndTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
 	DEFINE_PRED_FIELD_TOL( m_flKartBoostScale, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
+	DEFINE_PRED_FIELD_TOL( m_vecKartGroundNormal, FIELD_VECTOR, FTYPEDESC_INSENDTABLE, 0.01f ),
 
 	// misyl: Ammo is server side entities in HL2MP. Not catastrophic to error about.
 	// Just let the server stomp all over us.
@@ -217,6 +221,9 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_nKartDriftTier = 0;
 	m_flKartBoostEndTime = 0.0f;
 	m_flKartBoostScale = 1.0f;
+	m_vecKartGroundNormal.Init( 0.0f, 0.0f, 1.0f );
+	m_vecKartTiltNormal.Init( 0.0f, 0.0f, 1.0f );
+	m_flKartTiltTime = 0.0f;
 	m_angKartRenderAngles.Init();
 
 	m_nKartLap = 0;
@@ -519,6 +526,7 @@ void C_HL2MP_Player::DrawKartDebugOverlay( void )
 	DebugRow( "kart yaw", "%.1f", m_flKartYaw );
 	DebugRow( "camera yaw", "%.1f", m_flKartCamYaw );
 	DebugRow( "grounded", "%s", ( GetFlags() & FL_ONGROUND ) ? "yes" : "no" );
+	DebugRow( "ground normal", "%.2f %.2f %.2f", m_vecKartGroundNormal.x, m_vecKartGroundNormal.y, m_vecKartGroundNormal.z );
 	DebugRow( "origin", "%.1f %.1f %.1f", vecOrigin.x, vecOrigin.y, vecOrigin.z );
 	DebugRow( "throttle", "%d (W=+1, S=-1)", nThrottle );
 	DebugRow( "steer", "%d (D=+1, A=-1)", nSteer );
@@ -1703,6 +1711,35 @@ const QAngle& C_HL2MP_Player::GetRenderAngles()
 		}
 
 		m_angKartRenderAngles.Init( 0.0f, flYaw, 0.0f );
+
+		// Pitch and roll with the ground: the heading's frame turned so its up is
+		// the (smoothed) ground normal. Called several times a frame; only time
+		// passing moves the smoothing.
+		float flRate = kart_tilt_smooth.GetFloat();
+		if ( flRate > 0.0f )
+		{
+			float flDelta = gpGlobals->curtime - m_flKartTiltTime;
+			m_flKartTiltTime = gpGlobals->curtime;
+			if ( flDelta < 0.0f || flDelta > 0.5f )
+			{
+				m_vecKartTiltNormal = m_vecKartGroundNormal;	// first frame, teleport or a long pause
+			}
+			else if ( flDelta > 0.0f )
+			{
+				m_vecKartTiltNormal = Lerp( 1.0f - expf( -flRate * flDelta ), m_vecKartTiltNormal, m_vecKartGroundNormal );
+			}
+
+			Vector vecUp = m_vecKartTiltNormal;
+			if ( VectorNormalize( vecUp ) > 0.5f && vecUp.z > 0.5f )
+			{
+				Vector vecForward;
+				AngleVectors( m_angKartRenderAngles, &vecForward );
+				vecForward -= DotProduct( vecForward, vecUp ) * vecUp;
+				VectorNormalize( vecForward );
+				VectorAngles( vecForward, vecUp, m_angKartRenderAngles );
+			}
+		}
+
 		return m_angKartRenderAngles;
 	}
 	else
