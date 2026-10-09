@@ -809,6 +809,7 @@ void CHL2MPRules::ClientSettingsChanged( CBasePlayer *pPlayer )
 	// In a kart the model is the kart, whatever cl_playermodel says: don't re-apply it.
 	if ( pHL2Player->IsInKart() )
 	{
+		pHL2Player->ApplyKartColor();
 		BaseClass::ClientSettingsChanged( pPlayer );
 		return;
 	}

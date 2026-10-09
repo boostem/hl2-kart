@@ -43,4 +43,9 @@ extern ConVar kart_enabled;
 // HUD elements that mean nothing in a kart: no suit, no health, no weapons.
 #define KART_HIDEHUD_BITS	( HIDEHUD_HEALTH | HIDEHUD_WEAPONSELECTION | HIDEHUD_CROSSHAIR | HIDEHUD_FLASHLIGHT )
 
+// Kart color palette: cl_kart_color (client userinfo) indexes into it. Tint only,
+// until custom models with $colortint arrive.
+#define KART_COLOR_COUNT	8
+extern const color32 g_KartColors[KART_COLOR_COUNT];
+
 #endif // KART_SHAREDDEFS_H
