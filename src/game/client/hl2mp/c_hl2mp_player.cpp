@@ -33,6 +33,11 @@ ConVar sv_infinite_aux_power( "sv_infinite_aux_power", "0", FCVAR_CHEAT | FCVAR_
 ConVar kart_engine_pitch_min( "kart_engine_pitch_min", "85", FCVAR_ARCHIVE, "Kart engine loop pitch at a standstill (percent)." );
 ConVar kart_engine_pitch_max( "kart_engine_pitch_max", "170", FCVAR_ARCHIVE, "Kart engine loop pitch at kart_max_speed (percent)." );
 
+ConVar kart_skidmarks( "kart_skidmarks", "1", FCVAR_ARCHIVE, "Leave tire marks behind drifting karts." );
+ConVar kart_skidmark_interval( "kart_skidmark_interval", "24", FCVAR_ARCHIVE, "Units a drifting kart travels between tire marks." );
+
+extern ConVar r_decals;
+
 // Chase camera. Client only: the camera never feeds back into movement.
 ConVar kart_cam_dist( "kart_cam_dist", "220", FCVAR_ARCHIVE, "Kart chase camera distance behind the kart." );
 ConVar kart_cam_height( "kart_cam_height", "70", FCVAR_ARCHIVE, "Kart chase camera height above the look-at point." );
@@ -189,7 +194,12 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 
 	m_pKartEngineIdle = NULL;
 	m_pKartEngineRev = NULL;
+	m_pKartSkid = NULL;
 	m_flKartSoundLastSpeed = 0.0f;
+
+	m_vecKartSkidLastPos.Init();
+	m_flKartSkidDist = 0.0f;
+	m_bKartSkidActive = false;
 
 	m_flKartCamYaw = 0.0f;
 	m_bKartCamActive = false;
@@ -409,6 +419,7 @@ void C_HL2MP_Player::ClientThink( void )
 	UpdateIDTarget();
 
 	UpdateKartSounds();
+	UpdateKartSkidmarks();
 }
 
 // Top speed the engine pitch is mapped to: the replicated movement convar
@@ -466,6 +477,47 @@ void C_HL2MP_Player::UpdateKartSounds( void )
 	controller.SoundChangePitch( m_pKartEngineRev, flPitch, 0.1f );
 	controller.SoundChangeVolume( m_pKartEngineIdle, bThrottle ? 0.6f : 1.0f, 0.25f );
 	controller.SoundChangeVolume( m_pKartEngineRev, bThrottle ? 1.0f : 0.0f, 0.25f );
+
+	// Skid screech: starts on drift entry, louder the further the kart slides
+	// sideways, fades out when the drift ends.
+	if ( IsDrifting() )
+	{
+		float flMaxSlip = MAX( kart_drift_slip_angle.GetFloat(), 1.0f );
+		float flSkidVolume = RemapValClamped( fabs( GetKartSkidSlipAngle() ), 0.0f, flMaxSlip, 0.2f, 1.0f );
+
+		if ( !m_pKartSkid )
+		{
+			CPASAttenuationFilter filter( this );
+			m_pKartSkid = controller.SoundCreate( filter, entindex(), "Kart.Skid" );
+			controller.Play( m_pKartSkid, 0.0f, 100 );
+		}
+
+		controller.SoundChangeVolume( m_pKartSkid, flSkidVolume, 0.1f );
+	}
+	else if ( m_pKartSkid )
+	{
+		controller.SoundFadeOut( m_pKartSkid, 0.15f, true );
+		m_pKartSkid = NULL;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The drift slip angle in degrees. The local player has it predicted;
+//			for everyone else it isn't networked, so it comes from the
+//			networked kart heading against the interpolated velocity.
+//-----------------------------------------------------------------------------
+float C_HL2MP_Player::GetKartSkidSlipAngle( void )
+{
+	if ( IsLocalPlayer() )
+		return m_flKartSlipAngle;
+
+	Vector vecVelocity;
+	EstimateAbsVelocity( vecVelocity );
+	vecVelocity.z = 0.0f;
+	if ( vecVelocity.LengthSqr() < 50.0f * 50.0f )
+		return 0.0f;
+
+	return AngleDiff( m_flKartYaw, UTIL_VecToYaw( vecVelocity ) );
 }
 
 void C_HL2MP_Player::StopKartSounds( void )
@@ -484,7 +536,99 @@ void C_HL2MP_Player::StopKartSounds( void )
 		m_pKartEngineRev = NULL;
 	}
 
+	if ( m_pKartSkid )
+	{
+		controller.SoundDestroy( m_pKartSkid );
+		m_pKartSkid = NULL;
+	}
+
 	m_flKartSoundLastSpeed = 0.0f;
+}
+
+// The skid decals are 512 px long at $decalscale .5: 256 units, centred on
+// where they are shot. Shooting them half that behind the wheel keeps the mark
+// from reaching ahead of the kart.
+#define KART_SKIDMARK_HALF_LENGTH	128.0f
+
+//-----------------------------------------------------------------------------
+// Purpose: Every kart_skidmark_interval units a drifting kart travels, a tire
+//			mark under each rear wheel, along the direction of travel.
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::UpdateKartSkidmarks( void )
+{
+	if ( !kart_skidmarks.GetBool() || !r_decals.GetBool() || !IsInKart() || !IsAlive() || IsDormant() || !IsDrifting() )
+	{
+		m_bKartSkidActive = false;
+		return;
+	}
+
+	Vector vecOrigin = GetAbsOrigin();
+	if ( !m_bKartSkidActive )
+	{
+		// Drift entry: the first marks go down straight away.
+		m_bKartSkidActive = true;
+		m_vecKartSkidLastPos = vecOrigin;
+		m_flKartSkidDist = MAX( kart_skidmark_interval.GetFloat(), 1.0f );
+	}
+	else
+	{
+		m_flKartSkidDist += ( vecOrigin - m_vecKartSkidLastPos ).Length2D();
+		m_vecKartSkidLastPos = vecOrigin;
+	}
+
+	if ( m_flKartSkidDist < MAX( kart_skidmark_interval.GetFloat(), 1.0f ) )
+		return;
+
+	Vector vecDir;
+	EstimateAbsVelocity( vecDir );
+	vecDir.z = 0.0f;
+	if ( VectorNormalize( vecDir ) < 1.0f )
+		return;
+
+	m_flKartSkidDist = 0.0f;
+	ShootKartSkidmark( "wheel_rl", 1.0f, vecDir );
+	ShootKartSkidmark( "wheel_rr", -1.0f, vecDir );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: One tire mark on the ground under a rear wheel. The wheel comes
+//			from its attachment; models without one use a corner of the kart
+//			hull (flSide +1 is left, -1 right).
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::ShootKartSkidmark( const char *pszAttachment, float flSide, const Vector &vecDir )
+{
+	Vector vecWheel;
+	QAngle angWheel;
+	int iAttachment = LookupAttachment( pszAttachment );
+	if ( iAttachment <= 0 || !GetAttachment( iAttachment, vecWheel, angWheel ) )
+	{
+		Vector vecForward, vecLeft;
+		AngleVectors( QAngle( 0, m_flKartYaw, 0 ), &vecForward, &vecLeft, NULL );
+		vecLeft.Negate();
+		vecWheel = GetAbsOrigin() + vecForward * ( KART_HULL_MIN.x * 0.75f ) + vecLeft * ( flSide * KART_HULL_MAX.y * 0.75f );
+	}
+
+	// Short trace: an airborne kart leaves no mark.
+	trace_t tr;
+	UTIL_TraceLine( vecWheel + Vector( 0, 0, 16 ), vecWheel - Vector( 0, 0, 24 ), MASK_SOLID_BRUSHONLY, this, COLLISION_GROUP_NONE, &tr );
+	if ( tr.fraction == 1.0f || tr.startsolid || !tr.m_pEnt || tr.plane.normal.z < 0.7f )
+		return;
+
+	C_BaseEntity *pHit = tr.m_pEnt;
+	if ( !pHit->GetModel() || modelinfo->GetModelType( pHit->GetModel() ) != mod_brush )
+		return;
+
+	static const char *s_pszSkidDecals[] = { "decals/decal_skidmark01", "decals/decal_skidmark02" };
+	int iDecal = effects->Draw_DecalIndexFromName( (char *)s_pszSkidDecals[ RandomInt( 0, ARRAYSIZE( s_pszSkidDecals ) - 1 ) ] );
+
+	// The decal textures are long in V: putting S across the direction of
+	// travel lays the streak along it.
+	Vector vecRight = CrossProduct( vecDir, tr.plane.normal );
+	if ( VectorNormalize( vecRight ) < 0.001f )
+		return;
+
+	Vector vecPos = tr.endpos - vecDir * KART_SKIDMARK_HALF_LENGTH;
+	effects->DecalShoot( iDecal, pHit->entindex(), pHit->GetModel(), pHit->GetAbsOrigin(), pHit->GetAbsAngles(), vecPos, &vecRight, 0 );
 }
 
 //-----------------------------------------------------------------------------
