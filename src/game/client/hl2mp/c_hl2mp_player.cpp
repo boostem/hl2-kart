@@ -1244,6 +1244,33 @@ void C_HL2MPRagdoll::SetupWeights( const matrix3x4_t *pBoneToWorld, int nFlexWei
 	}
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Input handling. In kart mode the mouse does nothing and most keys
+//			mean nothing: the view angle sent with every command is the kart's
+//			predicted heading (so the engine's view angles, which in_main.cpp
+//			sets from cmd->viewangles right after this, drop the mouse deltas),
+//			and only the driving keys survive. forwardmove/sidemove stay as the
+//			input system made them; the movement only reads their signs.
+//
+//			Only a live, walking kart is locked: a dead kart spectates and a
+//			noclipping one flies with the normal view, matching
+//			CKartGameMovement::ShouldKartMove().
+//-----------------------------------------------------------------------------
+bool C_HL2MP_Player::CreateMove( float flInputSampleTime, CUserCmd *pCmd )
+{
+	bool bResult = BaseClass::CreateMove( flInputSampleTime, pCmd );
+
+	if ( IsInKart() && IsAlive() && GetMoveType() == MOVETYPE_WALK )
+	{
+		pCmd->buttons &= ( IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP | IN_ATTACK | IN_ATTACK2 | IN_SCORE );
+		pCmd->weaponselect = 0;
+		pCmd->impulse = 0;
+		pCmd->viewangles.Init( 0.0f, m_flKartYaw, 0.0f );
+	}
+
+	return bResult;
+}
+
 void C_HL2MP_Player::PostThink( void )
 {
 	BaseClass::PostThink();

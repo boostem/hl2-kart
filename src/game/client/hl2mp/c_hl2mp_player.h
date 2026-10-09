@@ -123,6 +123,9 @@ public:
 	float GetKartSpeed( void ) const { return m_flKartSpeed; }
 	float GetKartYaw( void ) const { return m_flKartYaw; }
 
+	// In kart mode: locks the view to the kart heading and strips non-kart input.
+	virtual bool CreateMove( float flInputSampleTime, CUserCmd *pCmd ) OVERRIDE;
+
 	virtual void PostThink( void );
 
 private:
@@ -167,6 +170,8 @@ private:
 
 	bool m_fIsWalking = false;
 
+	// The kart movement is the only thing that drives the kart state in prediction.
+	friend class CKartGameMovement;
 	bool	m_bKartMode;
 	float	m_flKartSpeed;		// forward speed along the kart's yaw, u/s
 	float	m_flKartYaw;		// heading of the kart body, degrees
