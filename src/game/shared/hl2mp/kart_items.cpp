@@ -10,6 +10,7 @@
 
 #ifdef GAME_DLL
 #include "hl2mp_player.h"
+#include "kart_hazards.h"
 #include "tier1/fmtstr.h"
 #endif
 
@@ -35,7 +36,7 @@ const KartItemInfo_t g_KartItems[KART_ITEM_COUNT] =
 	//	name			display name	backward	weight: leader front middle back	count: leader front middle back
 	{ "none",			"None",			false,		{  0,  0,  0,  0 },					{ 0, 0, 0, 0 }	KART_ITEM_USE( NULL ) },
 	{ "hubcap",			"Hubcap",		true,		{ 30, 35, 25, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
-	{ "oil_slick",		"Oil Slick",	true,		{ 45, 25, 10,  5 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
+	{ "oil_slick",		"Oil Slick",	true,		{ 45, 25, 10,  5 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Oil ) },
 	{ "nitro_can",		"Nitro Can",	false,		{  0, 15, 30, 35 },					{ 1, 1, 2, 3 }	KART_ITEM_USE( KartItemUse_Nitro ) },
 	{ "seeker",			"Seeker",		false,		{  0, 15, 25, 30 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
 	{ "buffer",			"Buffer",		false,		{ 25, 10, 10, 20 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },

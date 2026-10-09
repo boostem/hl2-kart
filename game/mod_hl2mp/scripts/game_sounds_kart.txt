@@ -191,6 +191,27 @@
 	"wave"			"vehicles/v8/v8_turbo_on_loop1.wav"
 }
 
+// Oil Slick (kart_hazard_oil): let go of by the kart, then landing on the track
+"Kart.OilThrow"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"0.6"
+	"soundlevel"	"SNDLVL_75dB"
+	"pitch"			"125,140"
+
+	"wave"			"vehicles/airboat/pontoon_splash1.wav"
+}
+
+"Kart.OilLand"
+{
+	"channel"		"CHAN_BODY"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_75dB"
+	"pitch"			"80,90"
+
+	"wave"			"vehicles/airboat/pontoon_splash2.wav"
+}
+
 // Race music (kart_race_manager "music"), played by each client to itself from GO (kart_music.cpp).
 // One entry per track, named Kart.Music.<file name>; volume is scaled by kart_music_volume.
 // HL2 score by path; listen before picking a track for a map (docs/valve-content.md lists them all).
