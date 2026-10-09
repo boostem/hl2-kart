@@ -112,7 +112,7 @@ private:
 	void		UpdateStatus( void );
 
 	static int	FinishedSortFunc( Racer_t * const *a, Racer_t * const *b );
-	static int	RacingSortFunc( C_HL2MP_Player * const *a, C_HL2MP_Player * const *b );
+	static int	RacingSortFunc( const int *a, const int *b );
 
 	SectionedListPanel		*m_pList;
 	Label					*m_pStatus;
@@ -391,10 +391,10 @@ int CKartResults::FinishedSortFunc( Racer_t * const *a, Racer_t * const *b )
 }
 
 // By networked race position, the ones without one (just joined) last.
-int CKartResults::RacingSortFunc( C_HL2MP_Player * const *a, C_HL2MP_Player * const *b )
+int CKartResults::RacingSortFunc( const int *a, const int *b )
 {
-	int nA = (*a)->GetKartRacePosition();
-	int nB = (*b)->GetKartRacePosition();
+	int nA = HL2MPRules()->GetKartStandingPosition( *a );
+	int nB = HL2MPRules()->GetKartStandingPosition( *b );
 	if ( nA <= 0 || nB <= 0 )
 		return ( nA <= 0 ) - ( nB <= 0 );
 	return nA - nB;
@@ -453,31 +453,33 @@ void CKartResults::RebuildList( void )
 		m_pList->SetItemFgColor( nItem, pRacer->userid == nLocalUserID ? m_LocalColor : ( pRacer->bDNF ? m_DimColor : m_RowColor ) );
 	}
 
-	// Karts still racing: everyone in a kart this race hasn't seen finish.
-	CUtlVectorFixedGrowable< C_HL2MP_Player *, MAX_PLAYERS > racing;
+	// Karts still racing: every racer this race hasn't seen finish. Read from the
+	// game rules' networked standings, which stay current for karts outside the PVS.
+	CHL2MPRules *pRules = HL2MPRules();
+	CUtlVectorFixedGrowable< int, MAX_PLAYERS > racing;
 	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 	{
 		if ( !g_PR || !g_PR->IsConnected( i ) || g_PR->GetTeam( i ) == TEAM_SPECTATOR )
 			continue;
 
-		C_HL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
-		if ( !pPlayer || !pPlayer->IsInKart() )
+		int nFlags = pRules->GetKartStandingFlags( i );
+		if ( !( nFlags & KART_STANDING_RACING ) || ( nFlags & ( KART_STANDING_FINISHED | KART_STANDING_DNF ) ) )
 			continue;
 
-		Racer_t *pRacer = FindRacer( pPlayer->GetUserID(), false );
+		Racer_t *pRacer = FindRacer( g_PR->GetUserID( i ), false );
 		if ( pRacer && pRacer->nPosition > 0 )
 			continue;
 
-		racing.AddToTail( pPlayer );
+		racing.AddToTail( i );
 	}
 	racing.Sort( RacingSortFunc );
 
 	FOR_EACH_VEC( racing, i )
 	{
-		C_HL2MP_Player *pPlayer = racing[i];
-		Racer_t *pRacer = FindRacer( pPlayer->GetUserID(), false );
+		int iPlayer = racing[i];
+		Racer_t *pRacer = FindRacer( g_PR->GetUserID( iPlayer ), false );
 
-		int nPosition = pPlayer->GetKartRacePosition();
+		int nPosition = pRules->GetKartStandingPosition( iPlayer );
 		if ( nPosition > 0 )
 		{
 			V_snprintf( szPos, sizeof( szPos ), "%d%s", nPosition, KartResults_Ordinal( nPosition ) );
@@ -486,16 +488,16 @@ void CKartResults::RebuildList( void )
 		{
 			V_strncpy( szPos, "--", sizeof( szPos ) );
 		}
-		KartResults_FormatTime( pRacer ? pRacer->flBestLap : 0.0f, szBest, sizeof( szBest ) );
+		KartResults_FormatTime( pRacer ? pRacer->flBestLap : pRules->GetKartStandingBestLap( iPlayer ), szBest, sizeof( szBest ) );
 
 		pData->SetString( "pos", szPos );
-		pData->SetString( "name", g_PR->GetPlayerName( pPlayer->entindex() ) );
+		pData->SetString( "name", g_PR->GetPlayerName( iPlayer ) );
 		pData->SetString( "best", szBest );
 		pData->SetString( "total", "--" );
 
 		int nItem = m_pList->AddItem( KART_RESULTS_SECTION_RACING, pData );
 		m_pList->SetItemFont( nItem, m_hRowFont );
-		m_pList->SetItemFgColor( nItem, pPlayer == pLocal ? m_LocalColor : m_DimColor );
+		m_pList->SetItemFgColor( nItem, iPlayer == ( pLocal ? pLocal->entindex() : -1 ) ? m_LocalColor : m_DimColor );
 	}
 
 	pData->deleteThis();
