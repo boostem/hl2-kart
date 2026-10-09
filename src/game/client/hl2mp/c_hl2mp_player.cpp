@@ -19,6 +19,8 @@
 #include "dlight.h"
 #include "soundenvelope.h"
 #include "bone_setup.h"
+#include "datacache/imdlcache.h"
+#include "animation.h"
 #include "clienteffectprecachesystem.h"
 
 // Don't alias here
@@ -52,8 +54,8 @@ ConVar cl_kart_steer_speed( "cl_kart_steer_speed", "10", FCVAR_ARCHIVE, "How qui
 ConVar cl_kart_driver( "cl_kart_driver", "1", FCVAR_ARCHIVE, "Draw a driver in karts that have grip_l/grip_r attachments." );
 ConVar cl_kart_driver_seat( "cl_kart_driver_seat", "-7 0 25", FCVAR_ARCHIVE, "Where the driver's pelvis sits, in kart model space (x forward, y left, z up)." );
 ConVar cl_kart_driver_feet( "cl_kart_driver_feet", "24 6 12", FCVAR_ARCHIVE, "Where the driver's feet rest, in kart model space; y is mirrored for the right foot." );
-ConVar cl_kart_driver_tilt( "cl_kart_driver_tilt", "5", FCVAR_ARCHIVE, "Degrees the driver's upper body leans forward towards the steering wheel." );
-ConVar cl_kart_driver_lean( "cl_kart_driver_lean", "10", FCVAR_ARCHIVE, "Degrees the driver's upper body leans into a full turn." );
+ConVar cl_kart_driver_tilt( "cl_kart_driver_tilt", "5", FCVAR_ARCHIVE, "Degrees the driver's upper body leans forward towards the steering wheel, when it is posed in code (without " KART_DRIVER_ANIMS ")." );
+ConVar cl_kart_driver_lean( "cl_kart_driver_lean", "12", FCVAR_ARCHIVE, "Degrees the driver's upper body leans into a full turn." );
 ConVar cl_kart_driver_look( "cl_kart_driver_look", "30", FCVAR_ARCHIVE, "Degrees the driver's head turns to look into a turn." );
 ConVar cl_kart_steer_drift_counter( "cl_kart_steer_drift_counter", "0.15 0.5 0.9", FCVAR_ARCHIVE, "Counter-steer in a drift as a fraction of cl_kart_steer_angle: steering into the drift, no steer, steering against it." );
 ConVar kart_cam_min_dist( "kart_cam_min_dist", "80", FCVAR_ARCHIVE, "Hide the local kart when a wall pulls the chase camera closer than this to it." );
@@ -641,7 +643,7 @@ void C_HL2MP_Player::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, 
 	{
 		{ m_iKartBoneSteerFL, flSign * ( bRight ? flOuter : flInner ) },
 		{ m_iKartBoneSteerFR, flSign * ( bRight ? flInner : flOuter ) },
-		{ m_iKartBoneSteeringWheel, -flAngle * cl_kart_steer_ratio.GetFloat() },
+		{ m_iKartBoneSteeringWheel, GetKartSteeringWheelTurn() },
 	};
 	for ( int i = 0; i < ARRAYSIZE( turns ); ++i )
 	{
@@ -656,6 +658,11 @@ void C_HL2MP_Player::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, 
 	}
 }
 
+float C_HL2MP_Player::GetKartSteeringWheelTurn( void ) const
+{
+	return -m_flKartSteerAngle * cl_kart_steer_ratio.GetFloat();
+}
+
 // A "x y z" convar as a vector, in kart model space.
 static Vector KartConVarVector( const ConVar &var )
 {
@@ -667,13 +674,16 @@ static Vector KartConVarVector( const ConVar &var )
 //-----------------------------------------------------------------------------
 // Purpose: The driver of a kart: a client-only copy of the player's model.
 //			HL2MP's models (citizens and combine, all on the ValveBiped
-//			skeleton) have no seated animation, so the idle pose is posed in
-//			code: moved onto the seat, the upper body tilted towards the
-//			steering wheel and leaning into turns, the head looking into
-//			them, then the legs reach for the pedals and the hands for the
-//			kart's grip_l/grip_r attachments, which turn with the steering
-//			wheel. The models' head_yaw pose parameter would need a sequence
-//			with a head_rot autolayer, which the reference pose lacks.
+//			skeleton) have no seated animation, so the driver takes its pose
+//			from KART_DRIVER_ANIMS (assets_src/kart_driver/): the bone
+//			rotations of its kart_drive_idle sequence, leaning into the turn
+//			with its lean pose parameter and looking into it with its
+//			head_yaw layer, go onto the model's own skeleton by bone name.
+//			The pose is then moved onto the seat, the feet onto the pedals
+//			and the palms onto the kart's grip_l/grip_r attachments, turning
+//			with the steering wheel. Without those animations the idle pose
+//			is posed in code instead: the upper body tilted and leaning, the
+//			head turned and the wrists straight onto the grips.
 //-----------------------------------------------------------------------------
 enum
 {
@@ -684,11 +694,16 @@ enum
 	KART_DRIVER_LIMBS
 };
 
+// Degrees KART_DRIVER_ANIMS's upper body leans at either end of its lean pose
+// parameter (LEAN in build_kart_driver.py).
+#define KART_DRIVER_ANIMS_LEAN	12.0f
+
 class C_KartDriver : public C_BaseAnimating
 {
 	DECLARE_CLASS( C_KartDriver, C_BaseAnimating );
 public:
-	explicit C_KartDriver( C_HL2MP_Player *pKart ) : m_pKart( pKart ), m_iPelvis( -1 ), m_iSpine( -1 ), m_iHead( -1 ) {}
+	explicit C_KartDriver( C_HL2MP_Player *pKart );
+	virtual ~C_KartDriver( void );
 
 	virtual CStudioHdr *OnNewModel( void ) OVERRIDE;
 	virtual bool ShouldDraw( void ) OVERRIDE;
@@ -696,12 +711,32 @@ public:
 	virtual void BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed ) OVERRIDE;
 
 private:
+	bool PoseFromAnims( CStudioHdr *pStudioHdr, Quaternion q[] );
+	void PoseUpperBodyInCode( CStudioHdr *pStudioHdr, int boneMask, matrix3x4_t *pBones, const matrix3x4_t &matKart, const Vector &vecSeat );
+
 	C_HL2MP_Player *m_pKart;	// owns this entity and removes it before it goes
+	CStudioHdr *m_pAnims;	// KART_DRIVER_ANIMS; NULL when it isn't there
+	int		m_iAnimsSequence;
+	int		m_iAnimsLean;
+	int		m_iAnimsHeadYaw;
+	int		m_iAnimsBone[MAXSTUDIOBONES];	// each of the model's bones in m_pAnims, -1 for none
 	int		m_iPelvis;
 	int		m_iSpine;
 	int		m_iHead;	// -1 when the model lacks one: the head then stays put
 	int		m_iLimb[KART_DRIVER_LIMBS][3];	// thigh, calf, foot / upper arm, forearm, hand; -1 when the model lacks one
+	int		m_iPalm[2];	// Anim_Attachment_LH/RH, where the hands hold the grips; -1 when the model lacks one
 };
+
+C_KartDriver::C_KartDriver( C_HL2MP_Player *pKart ) : m_pKart( pKart ), m_pAnims( NULL ), m_iAnimsSequence( -1 ),
+	m_iAnimsLean( -1 ), m_iAnimsHeadYaw( -1 ), m_iPelvis( -1 ), m_iSpine( -1 ), m_iHead( -1 )
+{
+	m_iPalm[0] = m_iPalm[1] = -1;
+}
+
+C_KartDriver::~C_KartDriver( void )
+{
+	delete m_pAnims;
+}
 
 CStudioHdr *C_KartDriver::OnNewModel( void )
 {
@@ -724,6 +759,28 @@ CStudioHdr *C_KartDriver::OnNewModel( void )
 			m_iLimb[i][j] = LookupBone( s_pszLimbs[i][j] );
 		}
 	}
+	m_iPalm[0] = LookupBone( "ValveBiped.Anim_Attachment_LH" );
+	m_iPalm[1] = LookupBone( "ValveBiped.Anim_Attachment_RH" );
+
+	// The animations, precached by the server.
+	if ( !m_pAnims )
+	{
+		const model_t *pAnims = modelinfo->GetModel( modelinfo->GetModelIndex( KART_DRIVER_ANIMS ) );
+		studiohdr_t *pAnimsStudio = pAnims ? modelinfo->GetStudiomodel( pAnims ) : NULL;
+		if ( pAnimsStudio )
+		{
+			m_pAnims = new CStudioHdr( pAnimsStudio, mdlcache );
+			m_iAnimsSequence = ::LookupSequence( m_pAnims, "kart_drive_idle" );
+			m_iAnimsLean = LookupPoseParameter( m_pAnims, "lean" );
+			m_iAnimsHeadYaw = LookupPoseParameter( m_pAnims, "head_yaw" );
+		}
+	}
+
+	const int nBones = hdr ? MIN( hdr->numbones(), MAXSTUDIOBONES ) : 0;
+	for ( int i = 0; i < nBones; ++i )
+	{
+		m_iAnimsBone[i] = m_pAnims ? Studio_BoneIndexByName( m_pAnims, hdr->pBone( i )->pszName() ) : -1;
+	}
 
 	return hdr;
 }
@@ -742,56 +799,64 @@ int C_KartDriver::DrawModel( int flags )
 	return BaseClass::DrawModel( flags );
 }
 
-void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed )
+//-----------------------------------------------------------------------------
+// Purpose: Takes the local bone rotations from kart_drive_idle, leaning and
+//			looking into the turn. The model keeps its own bone lengths.
+//			Returns false when the animations aren't there.
+//-----------------------------------------------------------------------------
+bool C_KartDriver::PoseFromAnims( CStudioHdr *pStudioHdr, Quaternion q[] )
 {
-	BaseClass::BuildTransformations( pStudioHdr, pos, q, cameraTransform, boneMask, boneComputed );
+	if ( !m_pKart || !m_pAnims || m_iAnimsSequence < 0 || pStudioHdr->numbones() > MAXSTUDIOBONES )
+		return false;
 
-	const int nBones = pStudioHdr->numbones();
-	if ( !m_pKart || nBones > MAXSTUDIOBONES )
-		return;
-
-	// Every bone posed here must have been set up for this mask.
-	if ( m_iPelvis < 0 || m_iSpine < 0 || !( pStudioHdr->boneFlags( m_iPelvis ) & boneMask ) || !( pStudioHdr->boneFlags( m_iSpine ) & boneMask ) )
-		return;
-	for ( int i = 0; i < KART_DRIVER_LIMBS; ++i )
+	float flPoses[MAXSTUDIOPOSEPARAM] = {};
+	for ( int i = 0; i < m_pAnims->GetNumPoseParameters(); ++i )
 	{
-		for ( int j = 0; j < 3; ++j )
-		{
-			if ( m_iLimb[i][j] < 0 || !( pStudioHdr->boneFlags( m_iLimb[i][j] ) & boneMask ) )
-				return;
-		}
+		Studio_SetPoseParameter( m_pAnims, i, 0.0f, flPoses[i] );
+	}
+	if ( m_iAnimsLean >= 0 )
+	{
+		float flLean = m_pKart->GetKartDriverLean() * cl_kart_driver_lean.GetFloat() / KART_DRIVER_ANIMS_LEAN;
+		Studio_SetPoseParameter( m_pAnims, m_iAnimsLean, clamp( flLean, -1.0f, 1.0f ), flPoses[m_iAnimsLean] );
+	}
+	if ( m_iAnimsHeadYaw >= 0 )
+	{
+		// head_yaw is positive to the left.
+		float flYaw = -m_pKart->GetKartDriverLook() * cl_kart_driver_look.GetFloat();
+		Studio_SetPoseParameter( m_pAnims, m_iAnimsHeadYaw, flYaw, flPoses[m_iAnimsHeadYaw] );
 	}
 
-	int iGrip[2] = { m_pKart->LookupAttachment( "grip_l" ), m_pKart->LookupAttachment( "grip_r" ) };
-	Vector vecGrip[2];
-	if ( iGrip[0] <= 0 || iGrip[1] <= 0 || !m_pKart->GetAttachment( iGrip[0], vecGrip[0] ) || !m_pKart->GetAttachment( iGrip[1], vecGrip[1] ) )
-		return;
+	Vector posAnims[MAXSTUDIOBONES];
+	Quaternion qAnims[MAXSTUDIOBONES];
+	IBoneSetup boneSetup( m_pAnims, BONE_USED_BY_ANYTHING, flPoses );
+	boneSetup.InitPose( posAnims, qAnims );
+	boneSetup.AccumulatePose( posAnims, qAnims, m_iAnimsSequence, 0.0f, 1.0f, gpGlobals->curtime, NULL );
 
-	matrix3x4_t *pBones = m_BoneAccessor.GetBoneArrayForWrite();
+	for ( int i = 0; i < pStudioHdr->numbones(); ++i )
+	{
+		if ( m_iAnimsBone[i] >= 0 )
+		{
+			q[i] = qAnims[m_iAnimsBone[i]];
+		}
+	}
+	return true;
+}
 
-	matrix3x4_t matKart;
-	AngleMatrix( m_pKart->GetRenderAngles(), m_pKart->GetRenderOrigin(), matKart );
+//-----------------------------------------------------------------------------
+// Purpose: Without the animations: the upper body (the spine and everything on
+//			it) tilts forward and leans into the turn about the pelvis, and
+//			the head turns to look into it.
+//-----------------------------------------------------------------------------
+void C_KartDriver::PoseUpperBodyInCode( CStudioHdr *pStudioHdr, int boneMask, matrix3x4_t *pBones, const matrix3x4_t &matKart, const Vector &vecSeat )
+{
+	const int nBones = pStudioHdr->numbones();
 	Vector vecForward, vecLeft, vecUp;
 	MatrixGetColumn( matKart, 0, vecForward );
 	MatrixGetColumn( matKart, 1, vecLeft );
 	MatrixGetColumn( matKart, 2, vecUp );
 
-	// Onto the seat: move the whole pose so the pelvis is there.
-	Vector vecSeat, vecPelvis;
-	VectorTransform( KartConVarVector( cl_kart_driver_seat ), matKart, vecSeat );
-	MatrixPosition( pBones[m_iPelvis], vecPelvis );
-	const Vector vecShift = vecSeat - vecPelvis;
-	for ( int i = 0; i < nBones; ++i )
-	{
-		for ( int k = 0; k < 3; ++k )
-		{
-			pBones[i][k][3] += vecShift[k];
-		}
-	}
-
-	// The upper body (the spine and everything on it) tilts forward and leans
-	// into the turn about the pelvis. Positive turns about the left axis
-	// pitch forward, about the forward axis roll right.
+	// Positive turns about the left axis pitch forward, about the forward
+	// axis roll right.
 	matrix3x4_t matTilt, matLean, matUpper;
 	MatrixBuildRotationAboutAxis( vecLeft, cl_kart_driver_tilt.GetFloat(), matTilt );
 	MatrixBuildRotationAboutAxis( vecForward, m_pKart->GetKartDriverLean() * cl_kart_driver_lean.GetFloat(), matLean );
@@ -813,8 +878,8 @@ void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Qu
 		}
 	}
 
-	// The head (and anything on it) turns about the upper body's up axis to
-	// look into the turn. Positive turns about up are to the left.
+	// The head (and anything on it) turns about the upper body's up axis.
+	// Positive turns about up are to the left.
 	if ( m_iHead >= 0 && ( pStudioHdr->boneFlags( m_iHead ) & boneMask ) )
 	{
 		Vector vecUpperUp, vecHead;
@@ -822,7 +887,6 @@ void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Qu
 		MatrixPosition( pBones[m_iHead], vecHead );
 		matrix3x4_t matLook;
 		MatrixBuildRotationAboutAxis( vecUpperUp, -m_pKart->GetKartDriverLook() * cl_kart_driver_look.GetFloat(), matLook );
-		Vector vecPivot;
 		VectorRotate( vecHead, matLook, vecPivot );
 		MatrixSetColumn( vecHead - vecPivot, 3, matLook );
 
@@ -839,6 +903,60 @@ void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Qu
 			}
 		}
 	}
+}
+
+void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed )
+{
+	const bool bAnimated = PoseFromAnims( pStudioHdr, q );
+
+	BaseClass::BuildTransformations( pStudioHdr, pos, q, cameraTransform, boneMask, boneComputed );
+
+	const int nBones = pStudioHdr->numbones();
+	if ( !m_pKart || nBones > MAXSTUDIOBONES )
+		return;
+
+	// Every bone posed here must have been set up for this mask.
+	if ( m_iPelvis < 0 || m_iSpine < 0 || !( pStudioHdr->boneFlags( m_iPelvis ) & boneMask ) || !( pStudioHdr->boneFlags( m_iSpine ) & boneMask ) )
+		return;
+	for ( int i = 0; i < KART_DRIVER_LIMBS; ++i )
+	{
+		for ( int j = 0; j < 3; ++j )
+		{
+			if ( m_iLimb[i][j] < 0 || !( pStudioHdr->boneFlags( m_iLimb[i][j] ) & boneMask ) )
+				return;
+		}
+	}
+
+	int iGrip[2] = { m_pKart->LookupAttachment( "grip_l" ), m_pKart->LookupAttachment( "grip_r" ) };
+	matrix3x4_t matGrip[2];
+	if ( iGrip[0] <= 0 || iGrip[1] <= 0 || !m_pKart->GetAttachment( iGrip[0], matGrip[0] ) || !m_pKart->GetAttachment( iGrip[1], matGrip[1] ) )
+		return;
+
+	matrix3x4_t *pBones = m_BoneAccessor.GetBoneArrayForWrite();
+
+	matrix3x4_t matKart;
+	AngleMatrix( m_pKart->GetRenderAngles(), m_pKart->GetRenderOrigin(), matKart );
+	Vector vecLeft, vecUp;
+	MatrixGetColumn( matKart, 1, vecLeft );
+	MatrixGetColumn( matKart, 2, vecUp );
+
+	// Onto the seat: move the whole pose so the pelvis is there.
+	Vector vecSeat, vecPelvis;
+	VectorTransform( KartConVarVector( cl_kart_driver_seat ), matKart, vecSeat );
+	MatrixPosition( pBones[m_iPelvis], vecPelvis );
+	const Vector vecShift = vecSeat - vecPelvis;
+	for ( int i = 0; i < nBones; ++i )
+	{
+		for ( int k = 0; k < 3; ++k )
+		{
+			pBones[i][k][3] += vecShift[k];
+		}
+	}
+
+	if ( !bAnimated )
+	{
+		PoseUpperBodyInCode( pStudioHdr, boneMask, pBones, matKart, vecSeat );
+	}
 
 	matrix3x4_t matBefore[MAXSTUDIOBONES];
 	memcpy( matBefore, pBones, nBones * sizeof( matrix3x4_t ) );
@@ -848,11 +966,37 @@ void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Qu
 	Vector vecTarget[KART_DRIVER_LIMBS], vecBend[KART_DRIVER_LIMBS];
 	VectorTransform( Vector( vecFeet.x, vecFeet.y, vecFeet.z ), matKart, vecTarget[KART_DRIVER_LEG_L] );
 	VectorTransform( Vector( vecFeet.x, -vecFeet.y, vecFeet.z ), matKart, vecTarget[KART_DRIVER_LEG_R] );
-	vecTarget[KART_DRIVER_ARM_L] = vecGrip[0];
-	vecTarget[KART_DRIVER_ARM_R] = vecGrip[1];
 	vecBend[KART_DRIVER_LEG_L] = vecBend[KART_DRIVER_LEG_R] = vecUp;
 	vecBend[KART_DRIVER_ARM_L] = ( vecLeft - vecUp ).Normalized();
 	vecBend[KART_DRIVER_ARM_R] = ( -vecLeft - vecUp ).Normalized();
+
+	// Animated hands keep their grip: they turn with the steering wheel about
+	// its column (the grips' Z axis), with the palm on the grip. Otherwise the
+	// wrist goes onto the grip.
+	matrix3x4_t matHand[2];
+	for ( int k = 0; k < 2; ++k )
+	{
+		Vector vecGrip;
+		MatrixPosition( matGrip[k], vecGrip );
+		vecTarget[KART_DRIVER_ARM_L + k] = vecGrip;
+		if ( !bAnimated )
+			continue;
+
+		const int iHand = m_iLimb[KART_DRIVER_ARM_L + k][2];
+		Vector vecColumn, vecWrist, vecPalm, vecOffset;
+		MatrixGetColumn( matGrip[k], 2, vecColumn );
+		matrix3x4_t matTurn;
+		MatrixBuildRotationAboutAxis( vecColumn, m_pKart->GetKartSteeringWheelTurn(), matTurn );
+		MatrixPosition( pBones[iHand], vecWrist );
+		vecPalm = vecWrist;
+		if ( m_iPalm[k] >= 0 && ( pStudioHdr->boneFlags( m_iPalm[k] ) & boneMask ) )
+		{
+			MatrixPosition( pBones[m_iPalm[k]], vecPalm );
+		}
+		VectorRotate( vecWrist - vecPalm, matTurn, vecOffset );
+		vecTarget[KART_DRIVER_ARM_L + k] += vecOffset;
+		ConcatTransforms( matTurn, pBones[iHand], matHand[k] );
+	}
 
 	bool bMoved[MAXSTUDIOBONES] = {};
 	for ( int i = 0; i < KART_DRIVER_LIMBS; ++i )
@@ -865,11 +1009,19 @@ void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Qu
 
 		if ( i == KART_DRIVER_ARM_L || i == KART_DRIVER_ARM_R )
 		{
-			// A straight wrist, carrying on from the forearm.
 			Vector vecForearm, vecHand;
 			MatrixPosition( pBones[iBone[1]], vecForearm );
 			MatrixPosition( pBones[iBone[2]], vecHand );
-			Studio_AlignIKMatrix( pBones[iBone[2]], vecHand - vecForearm );
+			if ( bAnimated )
+			{
+				MatrixCopy( matHand[i - KART_DRIVER_ARM_L], pBones[iBone[2]] );
+				MatrixSetColumn( vecHand, 3, pBones[iBone[2]] );
+			}
+			else
+			{
+				// A straight wrist, carrying on from the forearm.
+				Studio_AlignIKMatrix( pBones[iBone[2]], vecHand - vecForearm );
+			}
 		}
 		bMoved[iBone[0]] = bMoved[iBone[1]] = bMoved[iBone[2]] = true;
 	}
