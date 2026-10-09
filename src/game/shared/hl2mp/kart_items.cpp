@@ -12,6 +12,8 @@
 #include "hl2mp_player.h"
 #include "kart_hazards.h"
 #include "kart_proj_hubcap.h"
+#include "ilagcompensationmanager.h"
+#include "inetchannelinfo.h"
 #include "tier1/fmtstr.h"
 #endif
 
@@ -245,10 +247,64 @@ void KartGiveRandomItem( CHL2MP_Player *pPlayer )
 }
 
 // ##################################################################################
+//	>> Lag compensation for projectile items
+// ##################################################################################
+extern ConVar sv_maxunlag;
+
+ConVar kart_proj_lag_max( "kart_proj_lag_max", "0.25", FCVAR_NOTIFY, "Most latency, in seconds, projectile items make up for: how far a new projectile catches up against the karts its thrower saw, and the latency kart_proj_lag_slop counts.", true, 0.0f, true, 1.0f );
+ConVar kart_proj_lag_slop( "kart_proj_lag_slop", "200", FCVAR_NOTIFY, "Extra reach of projectile items against a kart, in units per second of that kart's latency (up to kart_proj_lag_max).", true, 0.0f, true, 2000.0f );
+
+float KartProj_GetCatchUpTime( CHL2MP_Player *pThrower )
+{
+	// Not rewound: a bot, cl_lagcompensation 0, sv_unlag 0 or a single player game.
+	CUserCmd *pCmd = pThrower->GetCurrentCommand();
+	if ( !pCmd || !lagcompensation->IsCurrentlyDoingLagCompensation() )
+		return 0.0f;
+
+	// The tick CLagCompensationManager::StartLagCompensation rewound the others to.
+	float flCorrect = 0.0f;
+	INetChannelInfo *nci = engine->GetPlayerNetInfo( pThrower->entindex() );
+	if ( nci )
+	{
+		flCorrect += nci->GetLatency( FLOW_OUTGOING );
+	}
+
+	int nLerpTicks = TIME_TO_TICKS( pThrower->m_fLerpTime );
+	flCorrect += TICKS_TO_TIME( nLerpTicks );
+	flCorrect = clamp( flCorrect, 0.0f, sv_maxunlag.GetFloat() );
+
+	int nTargetTick = pCmd->tick_count - nLerpTicks;
+	if ( fabs( flCorrect - TICKS_TO_TIME( gpGlobals->tickcount - nTargetTick ) ) > 0.2f )
+	{
+		nTargetTick = gpGlobals->tickcount - TIME_TO_TICKS( flCorrect );
+	}
+
+	float flRewind = TICKS_TO_TIME( gpGlobals->tickcount - nTargetTick );
+	return clamp( flRewind, 0.0f, MIN( kart_proj_lag_max.GetFloat(), sv_maxunlag.GetFloat() ) );
+}
+
+float KartProj_GetLagSlop( CHL2MP_Player *pTarget )
+{
+	if ( pTarget->IsBot() )
+		return 0.0f;
+
+	INetChannelInfo *nci = engine->GetPlayerNetInfo( pTarget->entindex() );
+	if ( !nci )
+		return 0.0f;
+
+	float flLatency = clamp( nci->GetLatency( FLOW_OUTGOING ), 0.0f, kart_proj_lag_max.GetFloat() );
+	return kart_proj_lag_slop.GetFloat() * flLatency;
+}
+
+// ##################################################################################
 //	>> kart_item_dump
 // ##################################################################################
 CON_COMMAND( kart_item_dump, "Print the kart item table: each item's weight and uses by race position bucket, and every kart's held item." )
 {
+	// Listen server host or rcon only: it prints to the server console.
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
 	Msg( "[kart] Items (%s), roulette %.2fs. Weight%% (uses) by bucket:\n", kart_items_enabled.GetBool() ? "enabled" : "disabled", kart_item_roulette_time.GetFloat() );
 
 	CUtlString line;
@@ -324,39 +380,42 @@ CON_COMMAND_F_COMPLETION( kart_give_item, "Give your kart an item, without the r
 		return;
 	}
 
+	// Replies go to the player's own console, which isn't the server's on a
+	// dedicated server.
 	if ( args.ArgC() < 2 )
 	{
-		Msg( "Usage: kart_give_item <name|number> [uses]. Items:" );
+		CUtlString usage( "Usage: kart_give_item <name|number> [uses]. Items:" );
 		for ( int i = 0; i < KART_ITEM_COUNT; i++ )
 		{
-			Msg( " %s", g_KartItems[i].pszName );
+			usage.Append( CFmtStr( " %s", g_KartItems[i].pszName ) );
 		}
-		Msg( "\n" );
+		usage.Append( "\n" );
+		ClientPrint( pPlayer, HUD_PRINTCONSOLE, usage.Get() );
 		return;
 	}
 
 	int item = KartItem_FromName( args.Arg( 1 ) );
 	if ( item == KART_ITEM_COUNT )
 	{
-		Warning( "[kart] Unknown item '%s'; kart_item_dump lists them.\n", args.Arg( 1 ) );
+		ClientPrint( pPlayer, HUD_PRINTCONSOLE, CFmtStr( "[kart] Unknown item '%s'; the usage (kart_give_item alone) lists them.\n", args.Arg( 1 ) ) );
 		return;
 	}
 
 	if ( !pPlayer->IsInKart() )
 	{
-		Warning( "[kart] %s is not in a kart.\n", pPlayer->GetPlayerName() );
+		ClientPrint( pPlayer, HUD_PRINTCONSOLE, CFmtStr( "[kart] %s is not in a kart.\n", pPlayer->GetPlayerName() ) );
 		return;
 	}
 
 	if ( item == KART_ITEM_NONE )
 	{
 		pPlayer->KartClearItem();
-		Msg( "[kart] %s: item cleared\n", pPlayer->GetPlayerName() );
+		ClientPrint( pPlayer, HUD_PRINTCONSOLE, CFmtStr( "[kart] %s: item cleared\n", pPlayer->GetPlayerName() ) );
 		return;
 	}
 
 	int nCount = args.ArgC() >= 3 ? atoi( args.Arg( 2 ) ) : 1;
 	pPlayer->KartGiveItem( item, nCount, 0.0f );
-	Msg( "[kart] %s: given %s x%d\n", pPlayer->GetPlayerName(), KartItem_GetName( item ), pPlayer->GetKartItemCount() );
+	ClientPrint( pPlayer, HUD_PRINTCONSOLE, CFmtStr( "[kart] %s: given %s x%d\n", pPlayer->GetPlayerName(), KartItem_GetName( item ), pPlayer->GetKartItemCount() ) );
 }
 #endif // GAME_DLL

@@ -118,6 +118,21 @@ extern ConVar kart_item_roulette_time;
 // Item box hooks, called by kart_item_box.
 bool KartPlayerHasItem( CHL2MP_Player *pPlayer );
 void KartGiveRandomItem( CHL2MP_Player *pPlayer );
+
+// Lag compensation for projectile items. A projectile is thrown with the
+// other karts rewound to where its thrower saw them (StartLagCompensation
+// around the throw), and moved straight away by the catch-up time against
+// them: what the thrower aimed at is hit. From then on it moves in present
+// time each tick, with its reach against each kart widened by the slop.
+//
+// Seconds the thrower's view of the other karts is behind the server, up to
+// kart_proj_lag_max; 0 when they aren't rewound. Call between Start and
+// FinishLagCompensation.
+float KartProj_GetCatchUpTime( CHL2MP_Player *pThrower );
+
+// Units a projectile's reach against this kart is widened by, for the kart's
+// own latency: kart_proj_lag_slop per second, up to kart_proj_lag_max.
+float KartProj_GetLagSlop( CHL2MP_Player *pTarget );
 #endif
 
 #endif // KART_ITEMS_H

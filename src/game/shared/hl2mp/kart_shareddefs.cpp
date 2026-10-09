@@ -16,7 +16,7 @@ ConVar kart_model( "kart_model", KART_DEFAULT_MODEL, FCVAR_REPLICATED | FCVAR_NO
 // Race flow. Replicated so the HUD can show "WAITING FOR PLAYERS (n/m)".
 ConVar kart_min_players( "kart_min_players", "1", FCVAR_REPLICATED | FCVAR_NOTIFY, "Karts needed before a race starts (unless every kart says mp_ready_signal in chat).", true, 1, true, MAX_PLAYERS );
 
-// Movement tuning (defaults duplicated in cfg/kart_tuning.cfg, which the server execs at map start).
+// Movement tuning (defaults duplicated in cfg/kart_tuning.cfg, which server.cfg and listenserver.cfg exec at map start).
 #define KART_TUNING_FLAGS	( FCVAR_REPLICATED | FCVAR_NOTIFY )
 
 // Speed

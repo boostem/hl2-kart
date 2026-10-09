@@ -269,8 +269,10 @@ CHL2MPRules::CHL2MPRules()
 	m_iKartRacesDone = 0;
 	m_bKartRestartPending = false;
 
-	// Kart movement tuning lives in a cfg so it can be changed without a rebuild.
-	engine->ServerCommand( "exec kart_tuning.cfg\n" );
+	// Kart movement tuning lives in cfg/kart_tuning.cfg, which server.cfg and
+	// listenserver.cfg (queued by the base class above) exec first thing, so
+	// their own settings after it win. Not exec'd here too: that would queue it
+	// after them and undo their overrides on every map.
 
 #endif
 }
