@@ -90,6 +90,7 @@ ConVar hl2_sprintspeed( "hl2_sprintspeed", "320", FCVAR_REPLICATED );
 #define	HL2_SPRINT_SPEED hl2_sprintspeed.GetFloat()
 
 static ConVar cl_playermodel( "cl_playermodel", "none", FCVAR_USERINFO | FCVAR_ARCHIVE | FCVAR_SERVER_CAN_EXECUTE, "Default Player Model");
+static ConVar cl_kart_color( "cl_kart_color", "0", FCVAR_USERINFO | FCVAR_ARCHIVE, "Kart color, 0-7" );
 static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physcannon", FCVAR_USERINFO | FCVAR_ARCHIVE, "Default Spawn Weapon");
 
 void SpawnBlood (Vector vecSpot, const Vector &vecDir, int bloodColor, float flDamage);

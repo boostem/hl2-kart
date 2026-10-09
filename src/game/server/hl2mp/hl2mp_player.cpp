@@ -643,8 +643,24 @@ void CHL2MP_Player::SetKartModel( void )
 	m_iPlayerSoundType = (int)PLAYER_SOUNDS_CITIZEN;
 	SetCollisionBounds( KART_HULL_MIN, KART_HULL_MAX );
 	ResetSequence( 0 );
+	ApplyKartColor();
 
 	m_flNextModelChangeTime = gpGlobals->curtime + MODEL_CHANGE_INTERVAL;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Tint the kart with the player's cl_kart_color. Bots have no userinfo,
+//			so they take a palette entry from their entity index.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::ApplyKartColor( void )
+{
+	int iColor = entindex();
+	if ( !IsFakeClient() )
+		iColor = atoi( engine->GetClientConVarValue( entindex(), "cl_kart_color" ) );
+
+	iColor = abs( iColor ) % KART_COLOR_COUNT;
+	const color32 &c = g_KartColors[iColor];
+	SetRenderColor( c.r, c.g, c.b );
 }
 
 void CHL2MP_Player::ResetAnimation( void )
