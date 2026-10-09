@@ -919,6 +919,17 @@ event KartBannerShow
 	Animate KartBanner	Alpha		"0"		Accel	1.6		0.4
 }
 
+// A countdown digit or GO (CKartBanner): punches in large, settles, fades
+// before the next tick.
+event KartBannerCount
+{
+	Animate KartBanner	Alpha		"0"		Linear	0.0		0.0
+	Animate KartBanner	Offset		"-8"	Linear	0.0		0.0
+	Animate KartBanner	Alpha		"1"		Linear	0.0		0.08
+	Animate KartBanner	Offset		"0"		Bounce	0.0		0.25
+	Animate KartBanner	Alpha		"0"		Accel	0.6		0.3
+}
+
 // The finishing place (CKartBanner): drops in and stays.
 event KartBannerHold
 {

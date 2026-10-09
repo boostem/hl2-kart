@@ -1,6 +1,6 @@
 // Kart race results panel (CKartResults, client hl2mp/kart_hud_results.cpp).
 // Shown when the local player finishes and when the race ends; kart_results
-// toggles it. Proportional, 640x480 units. The list's columns are sized in
+// toggles it. StatusLabel follows the race state. Proportional, 640x480 units. The list's columns are sized in
 // code to fill ResultsList: POS 40, BEST LAP and TOTAL 72 each, NAME the rest.
 "resource/ui/KartResults.res"
 {
@@ -34,14 +34,30 @@
 		"fgcolor_override"	"KartAmber"
 	}
 
+	"StatusLabel"
+	{
+		"ControlName"		"Label"
+		"fieldName"			"StatusLabel"
+		"xpos"				"0"
+		"ypos"				"36"
+		"wide"				"360"
+		"tall"				"14"
+		"visible"			"1"
+		"enabled"			"1"
+		"labelText"			""
+		"textAlignment"		"center"
+		"font"				"KartHudSmall"
+		"fgcolor_override"	"KartWhiteDim"
+	}
+
 	"ResultsList"
 	{
 		"ControlName"		"SectionedListPanel"
 		"fieldName"			"ResultsList"
 		"xpos"				"12"
-		"ypos"				"42"
+		"ypos"				"54"
 		"wide"				"336"
-		"tall"				"250"
+		"tall"				"238"
 		"visible"			"1"
 		"enabled"			"1"
 		"linespacing"		"18"
