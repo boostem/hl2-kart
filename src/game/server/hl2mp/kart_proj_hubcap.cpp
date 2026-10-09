@@ -11,6 +11,7 @@
 #include "movevars_shared.h"
 #include "collisionutils.h"
 #include "IEffects.h"
+#include "ilagcompensationmanager.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -163,7 +164,41 @@ bool CKartProjHubcap::Throw( CHL2MP_Player *pThrower, bool bBackward )
 		Msg( "[kart] %s threw a hubcap %s at %.0f u/s\n", pThrower->GetPlayerName(), bBackward ? "backward" : "forward", flSpeed );
 	}
 
+	pHubcap->CatchUp( pThrower );
 	return true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Moves a new hubcap on by the thrower's latency against the other
+//			karts rewound to where the thrower saw them, so it hits what the
+//			thrower aimed at. In tick steps, as its think would have.
+//-----------------------------------------------------------------------------
+void CKartProjHubcap::CatchUp( CHL2MP_Player *pThrower )
+{
+	CUserCmd *pCmd = pThrower->GetCurrentCommand();
+	if ( !pCmd )
+		return;
+
+	lagcompensation->StartLagCompensation( pThrower, pCmd );
+
+	float flCatchUp = KartProj_GetCatchUpTime( pThrower );
+	float flLeft = flCatchUp;
+	while ( flLeft > 0.0f && !IsMarkedForDeletion() )
+	{
+		float flStep = MIN( flLeft, TICK_INTERVAL );
+		flLeft -= flStep;
+		Move( flStep );
+	}
+
+	lagcompensation->FinishLagCompensation( pThrower );
+
+	// The time caught up is part of its life.
+	m_flDieTime -= flCatchUp;
+
+	if ( kart_debug_server.GetBool() && flCatchUp > 0.0f )
+	{
+		Msg( "[kart] hubcap %d caught up %.0f ms (%s)\n", entindex(), flCatchUp * 1000.0f, IsMarkedForDeletion() ? "broke" : "flying" );
+	}
 }
 
 void CKartProjHubcap::HubcapThink( void )
@@ -317,10 +352,14 @@ CHL2MP_Player *CKartProjHubcap::FindKartHit( const Vector &vecStart, const Vecto
 		if ( pPlayer == m_hThrower.Get() && gpGlobals->curtime < m_flThrowerSafeTime )
 			continue;
 
+		// Wider for a lagging kart: where it is here trails where its driver sees it.
+		float flSlop = KartProj_GetLagSlop( pPlayer );
+		Vector vecSlop( flSlop, flSlop, 0.0f );
+
 		Vector vecMins, vecMaxs;
 		pPlayer->CollisionProp()->WorldSpaceAABB( &vecMins, &vecMaxs );
-		vecMins += s_vecHubcapMins;
-		vecMaxs += s_vecHubcapMaxs;
+		vecMins += s_vecHubcapMins - vecSlop;
+		vecMaxs += s_vecHubcapMaxs + vecSlop;
 		if ( !IsBoxIntersectingRay( vecMins, vecMaxs, vecStart, vecEnd - vecStart ) )
 			continue;
 
