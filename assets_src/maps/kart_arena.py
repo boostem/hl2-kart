@@ -276,6 +276,20 @@ def build():
     nodes += [(p, arc) for p in corner(-ISLAND, ISLAND, 90)]
     nodes += [((-2400, 1100), hint), ((-2000, 600), arc), ((-2800, -600), arc), ((-2392, -1200), straight)]
     nodes += [(p, arc) for p in corner(-ISLAND, -ISLAND, 180)]
+    # Round the line off: a closed Catmull-Rom spline through the nodes above, 4 points per segment, so the path
+    # flows round the map instead of running in straight chords. Drift hints stay on the original nodes only.
+    def spline(n, t):
+        (p0, p1, p2, p3) = n
+        return tuple(0.5 * (2 * p1[k] + (p2[k] - p0[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t * t
+                            + (3 * p1[k] - p0[k] - 3 * p2[k] + p3[k]) * t ** 3) for k in (0, 1))
+
+    smooth, count = [], len(nodes)
+    for i, (pt, kv) in enumerate(nodes):
+        ctrl = [nodes[(i + d) % count][0] for d in (-1, 0, 1, 2)]
+        smooth.append((pt, kv))
+        for step in (1, 2, 3):
+            smooth.append((spline(ctrl, step / 4), {k: v for k, v in kv.items() if k != "drift"}))
+    nodes = smooth
     for i, ((x, y), kv) in enumerate(nodes):
         m.entity("kart_path_node", (int(round(x)), int(round(y)), 16), targetname="line%02d" % i,
                  next="line%02d" % ((i + 1) % len(nodes)), **kv)
