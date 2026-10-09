@@ -1745,4 +1745,3 @@ bool CHL2MP_Player::IsThreatFiringAtMe( CBaseEntity* threat ) const
 
 	return false;
 }
-static int ci_deliberate_compile_error = this_symbol_does_not_exist; // CI red/green test, reverted next commit
