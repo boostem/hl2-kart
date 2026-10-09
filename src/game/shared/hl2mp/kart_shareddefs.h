@@ -1,7 +1,7 @@
 //========= Copyright Valve Corporation, All rights reserved. ============//
 //
 // Purpose: Shared kart-mode definitions: the replicated master switch, the kart
-//			collision hull and eye position, and the placeholder kart model.
+//			collision hull and eye position, and the kart models.
 //
 //			The player entity IS the kart. There is no prop_vehicle and no
 //			vehicle controller: the player keeps its own (predicted) movement,
@@ -23,6 +23,10 @@
 // with the server. Players latch it at spawn (CHL2MP_Player::m_bKartMode):
 // change it and respawn to switch between kart and stock deathmatch.
 extern ConVar kart_enabled;
+
+// The kart model's path (KART_DEFAULT_MODEL by default). Replicated; players
+// take it at spawn, like kart_enabled.
+extern ConVar kart_model;
 
 // Kart movement tuning, read by CKartGameMovement on both sides. Replicated so
 // prediction matches the server; not cheats, so cfg/kart_tuning.cfg can set them.
@@ -50,13 +54,22 @@ extern ConVar kart_bump_cooldown;
 
 // Kart collision hull and eye position. A kart does not crouch, so the duck
 // hull is the standing hull and the duck view is the standing view.
-#define KART_HULL_MIN	Vector( -20, -20, 0 )
-#define KART_HULL_MAX	Vector( 20, 20, 40 )
+// The hull is an axis-aligned box that doesn't turn with the kart, so it can't
+// match the 112 x 70 x 50 kart model: it is as wide as the model's half-width
+// allows (the sides stop at walls, the nose and tail go in about 24 units) and
+// tall enough for the roll hoop. The view is at the model's vehicle_driver_eyes.
+#define KART_HULL_MIN	Vector( -32, -32, 0 )
+#define KART_HULL_MAX	Vector( 32, 32, 48 )
 #define KART_VIEW		Vector( 0, 0, 40 )
 #define KART_DEAD_VIEW	Vector( 0, 0, 14 )
 
-// Placeholder kart model until the real one lands: HL2's jeep. Valve content,
-// mounted from hl2_misc.vpk and referenced by path only.
+// The scrap kart, built for this mod (assets_src/kart_scrap/). Its attachments:
+// wheel_fl/fr/rl/rr (tyre contact patches), exhaust, vehicle_driver_eyes and
+// item_hold (behind the kart).
+#define KART_DEFAULT_MODEL		"models/kart/kart_scrap.mdl"
+
+// The earlier placeholder, HL2's jeep: Valve content, mounted from
+// hl2_misc.vpk and referenced by path only. Still precached for kart_model.
 #define KART_PLACEHOLDER_MODEL	"models/buggy.mdl"
 
 // Range of m_flKartSpeed as sent to other players (12 bits over this range

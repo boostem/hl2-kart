@@ -1,9 +1,10 @@
 """Render the four reference PNGs every model PR attaches: front, side, 3q and scale.
 
     blender -b model.blend -P tools/blender/render_model.py -- --out renders/
-    blender -b -P tools/blender/render_model.py -- --smd assets_src/<m>/<m>.smd --out renders/ [--buggy]
+    blender -b -P tools/blender/render_model.py -- --smd assets_src/<m>/<m>.smd --out renders/ [--buggy] [--texture t.png]
 
 Uses the model in the open .blend, or imports --smd with Blender Source Tools. 1 unit = 1 inch.
+--texture shows that image on every material of the model (its UVs), instead of the materials' flat colours.
 `scale` shows the model beside a 72-unit "citizen" box (and with --buggy a 120 x 70 x 50 buggy box).
 Writes <out>/front.png, side.png, 3q.png, scale.png.
 """
@@ -20,7 +21,7 @@ BUGGY = (120, 70, 50)
 
 def parse():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    opts = {"out": None, "smd": None, "buggy": False}
+    opts = {"out": None, "smd": None, "buggy": False, "texture": None}
     it = iter(argv)
     for a in it:
         if a == "--out":
@@ -29,10 +30,13 @@ def parse():
             opts["smd"] = next(it)
         elif a == "--buggy":
             opts["buggy"] = True
+        elif a == "--texture":
+            opts["texture"] = next(it)
         else:
             sys.exit("unknown option " + a)
     if not opts["out"]:
-        sys.exit("usage: blender -b [model.blend] -P render_model.py -- --out <dir> [--smd f.smd] [--buggy]")
+        sys.exit("usage: blender -b [model.blend] -P render_model.py -- --out <dir> [--smd f.smd] [--buggy]"
+                 " [--texture t.png]")
     return opts
 
 
@@ -64,6 +68,19 @@ def ref_box(name, size, x, color, label):
     txt.data.materials.append(tmat)
     txt.location.y -= 1
     return [box, txt]
+
+
+def apply_texture(objs, path):
+    """Put the image on every material of objs as the active image node, which workbench's TEXTURE colour shows."""
+    image = bpy.data.images.load(os.path.abspath(path))
+    for o in objs:
+        if not o.data.materials:
+            o.data.materials.append(bpy.data.materials.new("texture"))
+        for mat in o.data.materials:
+            mat.use_nodes = True
+            node = mat.node_tree.nodes.new("ShaderNodeTexImage")
+            node.image = image
+            mat.node_tree.nodes.active = node
 
 
 def camera(target, direction, dist, ortho_scale=None):
@@ -98,6 +115,8 @@ def main():
     model = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     if not model:
         sys.exit("no mesh objects to render")
+    if opts["texture"]:
+        apply_texture(model, opts["texture"])
     lo, hi = bounds(model)
     size, centre = hi - lo, (hi + lo) / 2
 
@@ -105,7 +124,7 @@ def main():
     sc.render.engine = "BLENDER_WORKBENCH"
     sc.render.resolution_x = sc.render.resolution_y = 768
     sc.display.shading.light = "STUDIO"
-    sc.display.shading.color_type = "MATERIAL"
+    sc.display.shading.color_type = "TEXTURE" if opts["texture"] else "MATERIAL"
     sc.display.shading.show_cavity = True
     sc.world = bpy.data.worlds.new("w")
     sc.world.color = (0.55, 0.57, 0.6)
@@ -113,8 +132,8 @@ def main():
     out = lambda n: os.path.join(os.path.abspath(opts["out"]), n + ".png")
 
     extent = max(size) * 1.1
-    render(out("front"), centre, (0, -1, 0), extent)
-    render(out("side"), centre, (1, 0, 0), extent)
+    render(out("front"), centre, (1, 0, 0), extent)  # models face +X
+    render(out("side"), centre, (0, -1, 0), extent)
     render(out("3q"), centre, (1, -1, 0.7), extent * 1.5)  # the diagonal is longer
 
     # scale: the citizen to the left of the model, the buggy (if asked) to the right
