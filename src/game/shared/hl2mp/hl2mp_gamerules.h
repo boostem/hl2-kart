@@ -175,6 +175,8 @@ public:
 	void OnKartRaceReset( void );
 	// kart_race_restart: a new race from WAITING, on a clean map and the grid.
 	bool RequestKartRaceRestart( void );
+	// The kart spectators watch: the best placed one still driving.
+	CHL2MP_Player *GetKartLeader( void );
 #endif
 
 	// Kart race: laps in the race (0 without a kart_race_manager) and how many
@@ -185,6 +187,17 @@ public:
 	void	SetKartLaps( int nLaps ) { m_nKartLaps = nLaps; }
 	void	SetKartRacers( int nRacers ) { m_nKartRacers = nRacers; }
 #endif
+
+	// Kart race standings by player index (1..maxClients), for the scoreboard.
+	// Copied from the players' race state every think and sent with the game
+	// rules, so unlike the race state on the players they don't go stale for
+	// karts outside the PVS. Flags: KART_STANDING_*.
+	int		GetKartStandingPosition( int iPlayer ) const;
+	int		GetKartStandingLap( int iPlayer ) const;
+	int		GetKartStandingFlags( int iPlayer ) const;
+	float	GetKartStandingBestLap( int iPlayer ) const;
+	// The final time once finished, else the running race time (0 before lap 1).
+	float	GetKartStandingRaceTime( int iPlayer ) const;
 	
 private:
 
@@ -197,6 +210,8 @@ private:
 	void KartShowResults( void );
 	int KartCountRacers( int *pnFinished = NULL, bool *pbAllReady = NULL );
 	void KartGetGridOrder( CUtlVector< CHL2MP_Player * > &order );
+	void KartPlayersThink( bool bRaceMap );
+	void KartRespawnSpectators( void );
 
 	int m_iKartRacesDone;				// races finished on this map
 	int m_iKartCountdownTick;			// last countdown second announced
@@ -210,6 +225,12 @@ private:
 	CNetworkVar( bool, m_bTeamPlayEnabled );
 	CNetworkVar( int, m_nKartLaps );
 	CNetworkVar( int, m_nKartRacers );
+	CNetworkArray( int, m_nKartStandingPosition, MAX_PLAYERS_ARRAY_SAFE );
+	CNetworkArray( int, m_nKartStandingLap, MAX_PLAYERS_ARRAY_SAFE );
+	CNetworkArray( int, m_nKartStandingFlags, MAX_PLAYERS_ARRAY_SAFE );
+	CNetworkArray( float, m_flKartStandingBestLap, MAX_PLAYERS_ARRAY_SAFE );
+	CNetworkArray( float, m_flKartStandingTotalTime, MAX_PLAYERS_ARRAY_SAFE );	// sum of the completed laps
+	CNetworkArray( float, m_flKartStandingLapStartTime, MAX_PLAYERS_ARRAY_SAFE );
 	CNetworkVar( float, m_flGameStartTime );
 	CUtlVector<EHANDLE> m_hRespawnableItemsAndWeapons;
 	float m_tmNextPeriodicThink;

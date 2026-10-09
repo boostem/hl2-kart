@@ -12,9 +12,13 @@
 //						frozen. kart_countdown ticks 3, 2, 1, then
 //						kart_race_start.
 //			RACING		laps count. Karts joining now are late joiners: they
-//						drive, but have no position and race the next one.
+//						spectate, have no position and race the next one.
 //			FINISHING	the first kart has finished; the others have
 //						kart_finish_timeout, then they are finished for them.
+//
+//			A kart that finishes drives on for kart_spectate_delay, then
+//			spectates the karts still racing (chase cam of the leader) until
+//			the next race puts it back on the grid.
 //			RESULTS		karts frozen for kart_results_time, then the next map
 //						if mp_timelimit has run out, else WAITING again on a
 //						clean map and the grid.
@@ -36,6 +40,7 @@ ConVar kart_countdown_time( "kart_countdown_time", "3", FCVAR_NOTIFY, "Seconds t
 ConVar kart_finish_timeout( "kart_finish_timeout", "30", FCVAR_NOTIFY, "Seconds the other karts have to finish once the first one has; then they are finished for them.", true, 0, false, 0 );
 ConVar kart_races_per_map( "kart_races_per_map", "1", FCVAR_NOTIFY, "Races run on a map before the server goes on to the next map of the mapcycle (a one-entry cycle restarts the map).", true, 1, false, 0 );
 ConVar kart_results_time( "kart_results_time", "10", FCVAR_NOTIFY, "Seconds the results are shown before the next race (or the next map once mp_timelimit has run out).", true, 0, false, 0 );
+ConVar kart_spectate_delay( "kart_spectate_delay", "2", FCVAR_NOTIFY, "Seconds a kart that finished drives on before it spectates the karts still racing.", true, 0, false, 0 );
 
 static void KartFormatTime( float flSeconds, char *pszOut, int nSize )
 {
@@ -52,11 +57,14 @@ void CHL2MPRules::KartRaceThink( void )
 	CKartRaceManager *pManager = KartRaceManager();
 	bool bRaceMap = kart_enabled.GetBool() && pManager && pManager->HasRoute();
 
+	KartPlayersThink( bRaceMap );
+
 	if ( !bRaceMap )
 	{
 		if ( GetKartRaceState() != KART_RACE_STATE_NONE )
 		{
 			KartSetState( KART_RACE_STATE_NONE, 0.0f );
+			KartRespawnSpectators();
 		}
 		m_bKartRestartPending = false;
 		return;
@@ -207,7 +215,7 @@ void CHL2MPRules::KartSetState( KartRaceState_t state, float flEndTime )
 	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 	{
 		CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
-		if ( !pPlayer || !pPlayer->IsInKart() )
+		if ( !pPlayer || !pPlayer->IsInKart() || pPlayer->IsObserver() )
 			continue;
 
 		if ( bFreeze )
@@ -219,6 +227,116 @@ void CHL2MPRules::KartSetState( KartRaceState_t state, float flEndTime )
 			pPlayer->RemoveFlag( FL_FROZEN );
 		}
 	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Every think: copies each player's race state into the standings
+//			the scoreboard shows, and sends karts that finished kart_spectate_delay
+//			ago to spectate the ones still racing.
+//-----------------------------------------------------------------------------
+void CHL2MPRules::KartPlayersThink( bool bRaceMap )
+{
+	bool bRunning = bRaceMap && IsKartRaceRunning();
+
+	for ( int i = 1; i < MAX_PLAYERS_ARRAY_SAFE; i++ )
+	{
+		CHL2MP_Player *pPlayer = ( i <= gpGlobals->maxClients ) ? ToHL2MPPlayer( UTIL_PlayerByIndex( i ) ) : NULL;
+		if ( !bRaceMap || !pPlayer || !pPlayer->IsConnected() || !pPlayer->IsInKart() )
+		{
+			m_nKartStandingPosition.Set( i, 0 );
+			m_nKartStandingLap.Set( i, 0 );
+			m_nKartStandingFlags.Set( i, 0 );
+			m_flKartStandingBestLap.Set( i, 0.0f );
+			m_flKartStandingTotalTime.Set( i, 0.0f );
+			m_flKartStandingLapStartTime.Set( i, 0.0f );
+			continue;
+		}
+
+		int nFlags = 0;
+		if ( CKartRaceManager::IsRacing( pPlayer ) )
+		{
+			nFlags |= KART_STANDING_RACING;
+		}
+		if ( pPlayer->IsKartFinished() )
+		{
+			nFlags |= KART_STANDING_FINISHED;
+		}
+		if ( pPlayer->IsKartDNF() )
+		{
+			nFlags |= KART_STANDING_DNF;
+		}
+		if ( pPlayer->IsKartLateJoin() )
+		{
+			nFlags |= KART_STANDING_LATE_JOIN;
+		}
+
+		m_nKartStandingPosition.Set( i, pPlayer->GetKartRacePosition() );
+		m_nKartStandingLap.Set( i, pPlayer->GetKartLap() );
+		m_nKartStandingFlags.Set( i, nFlags );
+		m_flKartStandingBestLap.Set( i, pPlayer->GetKartBestLap() );
+		m_flKartStandingTotalTime.Set( i, pPlayer->GetKartTotalTime() );
+		m_flKartStandingLapStartTime.Set( i, pPlayer->GetKartLapStartTime() );
+
+		// A did-not-finish is only ever given at the end, when the results come up.
+		if ( bRunning && pPlayer->IsKartFinished() && !pPlayer->IsKartDNF() && !pPlayer->IsObserver()
+			&& gpGlobals->curtime >= pPlayer->GetKartFinishTime() + kart_spectate_delay.GetFloat() )
+		{
+			pPlayer->KartStartSpectating();
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The karts spectating back on the track, when there is no race to
+//			watch any more or it starts over where the karts stand.
+//-----------------------------------------------------------------------------
+void CHL2MPRules::KartRespawnSpectators( void )
+{
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( pPlayer && pPlayer->IsKartSpectating() )
+		{
+			pPlayer->ForceRespawn();
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The best placed kart still on the track, for kart spectators: the
+//			race leader while a race runs, else any kart driving.
+//-----------------------------------------------------------------------------
+CHL2MP_Player *CHL2MPRules::GetKartLeader( void )
+{
+	CHL2MP_Player *pLeader = NULL;
+	int nLeaderPosition = 0;
+
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( !pPlayer || !pPlayer->IsConnected() || !pPlayer->IsInKart() || !pPlayer->IsAlive() || pPlayer->IsObserver()
+			|| pPlayer->GetTeamNumber() == TEAM_SPECTATOR )
+			continue;
+
+		// Karts still racing first, then ones that finished and haven't left the
+		// track yet, then unplaced ones (before the race).
+		int nPosition = pPlayer->GetKartRacePosition();
+		if ( nPosition <= 0 )
+		{
+			nPosition = 2 * MAX_PLAYERS + i;
+		}
+		else if ( pPlayer->IsKartFinished() )
+		{
+			nPosition += MAX_PLAYERS;
+		}
+		if ( !pLeader || nPosition < nLeaderPosition )
+		{
+			pLeader = pPlayer;
+			nLeaderPosition = nPosition;
+		}
+	}
+
+	return pLeader;
 }
 
 //-----------------------------------------------------------------------------
@@ -455,12 +573,18 @@ void CHL2MPRules::KartShowResults( void )
 //-----------------------------------------------------------------------------
 void CHL2MPRules::OnKartSpawned( CHL2MP_Player *pPlayer )
 {
-	if ( !IsKartRaceRunning() || pPlayer->m_bKartInRace || pPlayer->m_bKartLateJoin )
+	if ( !IsKartRaceRunning() || pPlayer->m_bKartInRace )
 		return;
 
-	pPlayer->m_bKartLateJoin = true;
-	Msg( "[kart] %s joined during the race and races the next one.\n", pPlayer->GetPlayerName() );
-	ClientPrint( pPlayer, HUD_PRINTCENTER, "Race in progress: you race the next one" );
+	if ( !pPlayer->m_bKartLateJoin )
+	{
+		pPlayer->m_bKartLateJoin = true;
+		Msg( "[kart] %s joined during the race and races the next one.\n", pPlayer->GetPlayerName() );
+		ClientPrint( pPlayer, HUD_PRINTCENTER, "Race in progress: you race the next one" );
+	}
+
+	// Watches the race meanwhile.
+	pPlayer->KartStartSpectating();
 }
 
 //-----------------------------------------------------------------------------
@@ -486,7 +610,9 @@ void CHL2MPRules::OnKartRaceReset( void )
 		|| GetKartRaceState() == KART_RACE_STATE_RESULTS )
 	{
 		KartSetState( KART_RACE_STATE_RACING, 0.0f );
+		// Marked first, so the spectators back on the track race this one.
 		KartMarkInRace();
+		KartRespawnSpectators();
 	}
 }
 

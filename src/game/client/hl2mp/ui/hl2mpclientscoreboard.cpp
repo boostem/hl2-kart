@@ -12,6 +12,7 @@
 #include "c_playerresource.h"
 #include "c_hl2mp_player.h"
 #include "hl2mp_gamerules.h"
+#include "kart_race_shared.h"
 
 #include <KeyValues.h>
 
@@ -55,6 +56,7 @@ CHL2MPClientScoreBoardDialog::CHL2MPClientScoreBoardDialog(IViewPort *pViewPort)
 {
 	SetProportional( true );
 	m_bAllowGrowth = false;
+	m_bKartLayout = false;
 }
 
 //-----------------------------------------------------------------------------
@@ -334,6 +336,15 @@ void CHL2MPClientScoreBoardDialog::InitScoreboardSections()
 	m_pPlayerList->SetBorder(NULL);
 
 	// fill out the structure of the scoreboard
+	m_bKartLayout = IsKartRace();
+	if ( m_bKartLayout )
+	{
+		AddKartHeader();
+		AddKartSection();
+		AddSection( TYPE_TEAM, TEAM_SPECTATOR );
+		return;
+	}
+
 	AddHeader();
 
 	if ( HL2MPRules()->IsTeamplay() )
@@ -356,6 +367,18 @@ void CHL2MPClientScoreBoardDialog::UpdateTeamInfo()
 {
 	if ( g_PR == NULL )
 		return;
+
+	// A race came or went while the scoreboard is up: rebuild it for that.
+	if ( m_bKartLayout != IsKartRace() )
+	{
+		Reset();
+	}
+
+	if ( m_bKartLayout )
+	{
+		UpdateKartTeamInfo();
+		return;
+	}
 
 	int iNumPlayersInGame = 0;
 
@@ -522,6 +545,12 @@ int CHL2MPClientScoreBoardDialog::GetSectionFromTeamNumber( int teamNumber )
 //-----------------------------------------------------------------------------
 bool CHL2MPClientScoreBoardDialog::GetPlayerScoreInfo(int playerIndex, KeyValues *kv)
 {
+	if ( m_bKartLayout )
+	{
+		GetKartPlayerScoreInfo( playerIndex, kv );
+		return true;
+	}
+
 	kv->SetInt("playerIndex", playerIndex);
 	kv->SetInt("team", g_PR->GetTeam( playerIndex ) );
 	kv->SetString("name", g_PR->GetPlayerName(playerIndex) );
@@ -619,6 +648,11 @@ void CHL2MPClientScoreBoardDialog::UpdatePlayerInfo()
 			UpdatePlayerAvatar( i, playerData );
 			int itemID = FindItemIDForPlayerIndex( i );
   			int sectionID = GetSectionFromTeamNumber( g_PR->GetTeam( i ) );
+			if ( m_bKartLayout && g_PR->GetTeam( i ) != TEAM_SPECTATOR )
+			{
+				// No teams in a race.
+				sectionID = GetSectionFromTeamNumber( TEAM_UNASSIGNED );
+			}
 						
 			if (itemID == -1)
 			{
@@ -658,4 +692,235 @@ void CHL2MPClientScoreBoardDialog::UpdatePlayerInfo()
 	}
 
 	
+}
+
+//=============================================================================
+// Kart race layout
+//=============================================================================
+
+// Row order: placed karts by race position, then unplaced racers (before the
+// race), then karts waiting for the next race, each by player index.
+#define KART_SORT_UNPLACED		1000
+#define KART_SORT_NOT_RACING	2000
+
+// m:ss.mmm, the race timer's format; "--" for no time.
+static void KartScoreboard_FormatTime( float flTime, char *pszOut, int nOutChars )
+{
+	if ( flTime <= 0.0f )
+	{
+		V_strncpy( pszOut, "--", nOutChars );
+		return;
+	}
+
+	int nMillis = (int)( flTime * 1000.0f + 0.5f );
+	V_snprintf( pszOut, nOutChars, "%d:%02d.%03d", nMillis / 60000, ( nMillis / 1000 ) % 60, nMillis % 1000 );
+}
+
+static const char *KartScoreboard_Ordinal( int n )
+{
+	if ( ( n % 100 ) / 10 == 1 )
+		return "th";
+
+	switch ( n % 10 )
+	{
+	case 1:		return "st";
+	case 2:		return "nd";
+	case 3:		return "rd";
+	default:	return "th";
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The map runs a kart race (a kart_race_manager with a route).
+//-----------------------------------------------------------------------------
+bool CHL2MPClientScoreBoardDialog::IsKartRace( void )
+{
+	return HL2MPRules() && HL2MPRules()->GetKartRaceState() != KART_RACE_STATE_NONE;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The column titles of the race standings.
+//-----------------------------------------------------------------------------
+void CHL2MPClientScoreBoardDialog::AddKartHeader()
+{
+	HScheme hScheme = GetScheme();
+
+	m_pPlayerList->AddSection( 0, "" );
+	m_pPlayerList->SetSectionAlwaysVisible( 0 );
+	m_pPlayerList->AddColumnToSection( 0, "pos", "Pos", 0, scheme()->GetProportionalScaledValueEx( hScheme, KART_POS_WIDTH ) );
+	m_pPlayerList->AddColumnToSection( 0, "avatar", "", 0, m_iAvatarWidth * 2 );
+	m_pPlayerList->AddColumnToSection( 0, "name", "", 0, scheme()->GetProportionalScaledValueEx( hScheme, KART_NAME_WIDTH ) - ( m_iAvatarWidth * 2 ) );
+	m_pPlayerList->AddColumnToSection( 0, "lap", "Lap", SectionedListPanel::COLUMN_RIGHT, scheme()->GetProportionalScaledValueEx( hScheme, KART_LAP_WIDTH ) );
+	m_pPlayerList->AddColumnToSection( 0, "best", "Best lap", SectionedListPanel::COLUMN_RIGHT, scheme()->GetProportionalScaledValueEx( hScheme, KART_TIME_WIDTH ) );
+	m_pPlayerList->AddColumnToSection( 0, "total", "Total", SectionedListPanel::COLUMN_RIGHT, scheme()->GetProportionalScaledValueEx( hScheme, KART_TIME_WIDTH ) );
+	m_pPlayerList->AddColumnToSection( 0, "ping", "#PlayerPing", SectionedListPanel::COLUMN_RIGHT, scheme()->GetProportionalScaledValueEx( hScheme, KART_PING_WIDTH ) );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: One section for every kart, sorted by race position.
+//-----------------------------------------------------------------------------
+void CHL2MPClientScoreBoardDialog::AddKartSection()
+{
+	HScheme hScheme = GetScheme();
+	int sectionID = GetSectionFromTeamNumber( TEAM_UNASSIGNED );
+
+	m_pPlayerList->AddSection( sectionID, "", StaticKartSortFunc );
+	m_pPlayerList->AddColumnToSection( sectionID, "pos", "", 0, scheme()->GetProportionalScaledValueEx( hScheme, KART_POS_WIDTH ) );
+	if ( ShowAvatars() )
+	{
+		m_pPlayerList->AddColumnToSection( sectionID, "avatar", "", SectionedListPanel::COLUMN_IMAGE, ( m_iAvatarWidth * 2 ) );
+	}
+	m_pPlayerList->AddColumnToSection( sectionID, "name", "", 0, scheme()->GetProportionalScaledValueEx( hScheme, KART_NAME_WIDTH ) - ( m_iAvatarWidth * 2 ) );
+	m_pPlayerList->AddColumnToSection( sectionID, "lap", "", SectionedListPanel::COLUMN_RIGHT, scheme()->GetProportionalScaledValueEx( hScheme, KART_LAP_WIDTH ) );
+	m_pPlayerList->AddColumnToSection( sectionID, "best", "", SectionedListPanel::COLUMN_RIGHT, scheme()->GetProportionalScaledValueEx( hScheme, KART_TIME_WIDTH ) );
+	m_pPlayerList->AddColumnToSection( sectionID, "total", "", SectionedListPanel::COLUMN_RIGHT, scheme()->GetProportionalScaledValueEx( hScheme, KART_TIME_WIDTH ) );
+	m_pPlayerList->AddColumnToSection( sectionID, "ping", "", SectionedListPanel::COLUMN_RIGHT, scheme()->GetProportionalScaledValueEx( hScheme, KART_PING_WIDTH ) );
+	m_pPlayerList->SetSectionAlwaysVisible( sectionID );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The section title: the race's state and laps.
+//-----------------------------------------------------------------------------
+void CHL2MPClientScoreBoardDialog::UpdateKartTeamInfo()
+{
+	int nKarts = 0;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		if ( g_PR->IsConnected( i ) && g_PR->GetTeam( i ) != TEAM_SPECTATOR )
+		{
+			nKarts++;
+		}
+	}
+
+	const char *pszState;
+	switch ( HL2MPRules()->GetKartRaceState() )
+	{
+	case KART_RACE_STATE_WAITING:	pszState = "Waiting for the race";	break;
+	case KART_RACE_STATE_COUNTDOWN:	pszState = "On the grid";			break;
+	case KART_RACE_STATE_RACING:
+	case KART_RACE_STATE_FINISHING:	pszState = "Racing";				break;
+	case KART_RACE_STATE_RESULTS:	pszState = "Results";				break;
+	default:						pszState = "Race";					break;
+	}
+
+	char szTitle[128];
+	int nLaps = HL2MPRules()->GetKartLaps();
+	if ( nLaps > 0 )
+	{
+		V_snprintf( szTitle, sizeof( szTitle ), "%s  -  %d lap%s  -  %d kart%s", pszState, nLaps, nLaps == 1 ? "" : "s", nKarts, nKarts == 1 ? "" : "s" );
+	}
+	else
+	{
+		V_snprintf( szTitle, sizeof( szTitle ), "%s  -  %d kart%s", pszState, nKarts, nKarts == 1 ? "" : "s" );
+	}
+
+	wchar_t wszTitle[128];
+	g_pVGuiLocalize->ConvertANSIToUnicode( szTitle, wszTitle, sizeof( wszTitle ) );
+	m_pPlayerList->ModifyColumn( GetSectionFromTeamNumber( TEAM_UNASSIGNED ), "name", wszTitle );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: A kart's row: position, name, lap, best lap, total time, ping. The
+//			race state comes from the game rules' standings, which stay current
+//			for karts outside the PVS.
+//-----------------------------------------------------------------------------
+void CHL2MPClientScoreBoardDialog::GetKartPlayerScoreInfo( int playerIndex, KeyValues *kv )
+{
+	CHL2MPRules *pRules = HL2MPRules();
+	int nFlags = pRules->GetKartStandingFlags( playerIndex );
+	int nPosition = pRules->GetKartStandingPosition( playerIndex );
+	int nLap = pRules->GetKartStandingLap( playerIndex );
+	bool bRacing = ( nFlags & KART_STANDING_RACING ) != 0;
+	bool bFinished = ( nFlags & KART_STANDING_FINISHED ) != 0;
+
+	kv->SetInt( "playerIndex", playerIndex );
+	kv->SetInt( "team", g_PR->GetTeam( playerIndex ) );
+	kv->SetString( "name", g_PR->GetPlayerName( playerIndex ) );
+
+	char szText[32];
+
+	// Position
+	if ( bRacing && nPosition > 0 )
+	{
+		V_snprintf( szText, sizeof( szText ), "%d%s", nPosition, KartScoreboard_Ordinal( nPosition ) );
+		kv->SetString( "pos", szText );
+		kv->SetInt( "sortkey", nPosition );
+	}
+	else
+	{
+		kv->SetString( "pos", "" );
+		kv->SetInt( "sortkey", ( bRacing ? KART_SORT_UNPLACED : KART_SORT_NOT_RACING ) + playerIndex );
+	}
+
+	// Lap
+	if ( nFlags & KART_STANDING_DNF )
+	{
+		kv->SetString( "lap", "DNF" );
+	}
+	else if ( bFinished )
+	{
+		kv->SetString( "lap", "Done" );
+	}
+	else if ( nFlags & KART_STANDING_LATE_JOIN )
+	{
+		kv->SetString( "lap", "Next" );
+	}
+	else if ( bRacing && nLap > 0 )
+	{
+		int nLaps = pRules->GetKartLaps();
+		if ( nLaps > 0 )
+		{
+			V_snprintf( szText, sizeof( szText ), "%d/%d", nLap, nLaps );
+		}
+		else
+		{
+			V_snprintf( szText, sizeof( szText ), "%d", nLap );
+		}
+		kv->SetString( "lap", szText );
+	}
+	else
+	{
+		kv->SetString( "lap", "--" );
+	}
+
+	// Best lap and total
+	KartScoreboard_FormatTime( pRules->GetKartStandingBestLap( playerIndex ), szText, sizeof( szText ) );
+	kv->SetString( "best", szText );
+
+	if ( nFlags & KART_STANDING_DNF )
+	{
+		kv->SetString( "total", "--" );
+	}
+	else
+	{
+		KartScoreboard_FormatTime( pRules->GetKartStandingRaceTime( playerIndex ), szText, sizeof( szText ) );
+		kv->SetString( "total", szText );
+	}
+
+	// Ping
+	if ( g_PR->GetPing( playerIndex ) < 1 )
+	{
+		kv->SetString( "ping", g_PR->IsFakePlayer( playerIndex ) ? "BOT" : "" );
+	}
+	else
+	{
+		kv->SetInt( "ping", g_PR->GetPing( playerIndex ) );
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: By race position (see GetKartPlayerScoreInfo's sortkey).
+//-----------------------------------------------------------------------------
+bool CHL2MPClientScoreBoardDialog::StaticKartSortFunc( vgui::SectionedListPanel *list, int itemID1, int itemID2 )
+{
+	KeyValues *it1 = list->GetItemData( itemID1 );
+	KeyValues *it2 = list->GetItemData( itemID2 );
+	Assert( it1 && it2 );
+
+	int v1 = it1->GetInt( "sortkey" );
+	int v2 = it2->GetInt( "sortkey" );
+	if ( v1 != v2 )
+		return v1 < v2;
+
+	return itemID1 < itemID2;
 }

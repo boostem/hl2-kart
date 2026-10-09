@@ -64,12 +64,24 @@ BEGIN_NETWORK_TABLE_NOBASE( CHL2MPRules, DT_HL2MPRules )
 		RecvPropTime( RECVINFO( m_flKartStateEndTime ) ),
 		RecvPropInt( RECVINFO( m_nKartLaps ) ),
 		RecvPropInt( RECVINFO( m_nKartRacers ) ),
+		RecvPropArray3( RECVINFO_ARRAY( m_nKartStandingPosition ), RecvPropInt( RECVINFO( m_nKartStandingPosition[0] ) ) ),
+		RecvPropArray3( RECVINFO_ARRAY( m_nKartStandingLap ), RecvPropInt( RECVINFO( m_nKartStandingLap[0] ) ) ),
+		RecvPropArray3( RECVINFO_ARRAY( m_nKartStandingFlags ), RecvPropInt( RECVINFO( m_nKartStandingFlags[0] ) ) ),
+		RecvPropArray3( RECVINFO_ARRAY( m_flKartStandingBestLap ), RecvPropFloat( RECVINFO( m_flKartStandingBestLap[0] ) ) ),
+		RecvPropArray3( RECVINFO_ARRAY( m_flKartStandingTotalTime ), RecvPropFloat( RECVINFO( m_flKartStandingTotalTime[0] ) ) ),
+		RecvPropArray3( RECVINFO_ARRAY( m_flKartStandingLapStartTime ), RecvPropFloat( RECVINFO( m_flKartStandingLapStartTime[0] ) ) ),
 	#else
 		SendPropBool( SENDINFO( m_bTeamPlayEnabled ) ),
 		SendPropInt( SENDINFO( m_nKartRaceState ), KART_NET_RACE_STATE_BITS, SPROP_UNSIGNED ),
 		SendPropTime( SENDINFO( m_flKartStateEndTime ) ),
 		SendPropInt( SENDINFO( m_nKartLaps ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
 		SendPropInt( SENDINFO( m_nKartRacers ), KART_NET_POSITION_BITS, SPROP_UNSIGNED ),
+		SendPropArray3( SENDINFO_ARRAY3( m_nKartStandingPosition ), SendPropInt( SENDINFO_ARRAY( m_nKartStandingPosition ), KART_NET_POSITION_BITS, SPROP_UNSIGNED ) ),
+		SendPropArray3( SENDINFO_ARRAY3( m_nKartStandingLap ), SendPropInt( SENDINFO_ARRAY( m_nKartStandingLap ), KART_NET_LAP_BITS, SPROP_UNSIGNED ) ),
+		SendPropArray3( SENDINFO_ARRAY3( m_nKartStandingFlags ), SendPropInt( SENDINFO_ARRAY( m_nKartStandingFlags ), KART_NET_STANDING_FLAG_BITS, SPROP_UNSIGNED ) ),
+		SendPropArray3( SENDINFO_ARRAY3( m_flKartStandingBestLap ), SendPropFloat( SENDINFO_ARRAY( m_flKartStandingBestLap ), 0, SPROP_NOSCALE ) ),
+		SendPropArray3( SENDINFO_ARRAY3( m_flKartStandingTotalTime ), SendPropFloat( SENDINFO_ARRAY( m_flKartStandingTotalTime ), 0, SPROP_NOSCALE ) ),
+		SendPropArray3( SENDINFO_ARRAY3( m_flKartStandingLapStartTime ), SendPropFloat( SENDINFO_ARRAY( m_flKartStandingLapStartTime ), 0, SPROP_NOSCALE ) ),
 	#endif
 
 END_NETWORK_TABLE()
@@ -216,6 +228,16 @@ CHL2MPRules::CHL2MPRules()
 	m_nKartLaps = 0;
 	m_nKartRacers = 0;
 
+	for ( int i = 0; i < MAX_PLAYERS_ARRAY_SAFE; i++ )
+	{
+		m_nKartStandingPosition.Set( i, 0 );
+		m_nKartStandingLap.Set( i, 0 );
+		m_nKartStandingFlags.Set( i, 0 );
+		m_flKartStandingBestLap.Set( i, 0.0f );
+		m_flKartStandingTotalTime.Set( i, 0.0f );
+		m_flKartStandingLapStartTime.Set( i, 0.0f );
+	}
+
 #ifndef CLIENT_DLL
 	// Create the team managers
 	for ( int i = 0; i < ARRAYSIZE( sTeamNames ); i++ )
@@ -258,6 +280,46 @@ bool CHL2MPRules::IsKartRaceFrozen( void ) const
 bool CHL2MPRules::IsKartRaceRunning( void ) const
 {
 	return GetKartRaceState() == KART_RACE_STATE_RACING || GetKartRaceState() == KART_RACE_STATE_FINISHING;
+}
+
+static bool KartStandingIndexValid( int iPlayer )
+{
+	return iPlayer >= 1 && iPlayer < MAX_PLAYERS_ARRAY_SAFE;
+}
+
+int CHL2MPRules::GetKartStandingPosition( int iPlayer ) const
+{
+	return KartStandingIndexValid( iPlayer ) ? m_nKartStandingPosition[iPlayer] : 0;
+}
+
+int CHL2MPRules::GetKartStandingLap( int iPlayer ) const
+{
+	return KartStandingIndexValid( iPlayer ) ? m_nKartStandingLap[iPlayer] : 0;
+}
+
+int CHL2MPRules::GetKartStandingFlags( int iPlayer ) const
+{
+	return KartStandingIndexValid( iPlayer ) ? m_nKartStandingFlags[iPlayer] : 0;
+}
+
+float CHL2MPRules::GetKartStandingBestLap( int iPlayer ) const
+{
+	return KartStandingIndexValid( iPlayer ) ? m_flKartStandingBestLap[iPlayer] : 0.0f;
+}
+
+float CHL2MPRules::GetKartStandingRaceTime( int iPlayer ) const
+{
+	if ( !KartStandingIndexValid( iPlayer ) )
+		return 0.0f;
+
+	if ( ( m_nKartStandingFlags[iPlayer] & KART_STANDING_FINISHED ) || m_nKartStandingLap[iPlayer] <= 0 )
+		return m_flKartStandingTotalTime[iPlayer];
+
+	// The laps only run while the race does: frozen at the results.
+	if ( !IsKartRaceRunning() )
+		return m_flKartStandingTotalTime[iPlayer];
+
+	return m_flKartStandingTotalTime[iPlayer] + MAX( gpGlobals->curtime - m_flKartStandingLapStartTime[iPlayer], 0.0f );
 }
 
 const CViewVectors* CHL2MPRules::GetViewVectors()const
