@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Convert an image to a Source VTF (+ VMT) under game/mod_hl2mp/materials/.
 
-usage: img2vtf.py <image> <material path> [--type model|world] [--normal <image>]
+usage: img2vtf.py <image> <material path> [--type model|world|vgui] [--normal <image>]
                   [--surfaceprop NAME] [--metal] [--game-dir DIR]
 
 <material path> is relative to materials/, without extension (e.g. props/crate01).
@@ -9,6 +9,9 @@ Run with tools/venv/bin/python (see tools/setup_venv.sh).
 
 The VTF is written here directly (version 7.2, DXT1 without alpha, DXT5 with, full mip chain,
 no thumbnail); Pillow does the resize and the DXT compression.
+
+--type vgui is for HUD icons drawn by vgui (scripts/mod_textures.txt): UnlitGeneric, clamped, tinted
+by the draw color through $vertexcolor and $vertexalpha. Draw those white on transparent.
 """
 import argparse
 import io
@@ -22,7 +25,9 @@ REPO = Path(__file__).resolve().parent.parent
 MAX_SIZE = 1024
 
 IMAGE_FORMAT_DXT1, IMAGE_FORMAT_DXT5 = 13, 15
+FLAG_CLAMPS, FLAG_CLAMPT = 0x4, 0x8
 FLAG_NORMAL = 0x80
+FLAG_NOLOD = 0x200
 FLAG_EIGHTBITALPHA = 0x2000
 
 
@@ -95,7 +100,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("image")
     ap.add_argument("path", help="material path relative to materials/, no extension")
-    ap.add_argument("--type", choices=["model", "world"], default="model")
+    ap.add_argument("--type", choices=["model", "world", "vgui"], default="model")
     ap.add_argument("--normal", help="normal map image (writes <path>_normal.vtf, sets $bumpmap)")
     ap.add_argument("--surfaceprop", default="default")
     ap.add_argument("--metal", action="store_true", help="add $envmap env_cubemap and $envmaptint")
@@ -106,6 +111,13 @@ def main():
         REPO = Path(a.game_dir)
 
     path = a.path.strip("/").removesuffix(".vtf").removesuffix(".vmt")
+    if a.type == "vgui":
+        write_vtf(a.image, path, FLAG_CLAMPS | FLAG_CLAMPT | FLAG_NOLOD)
+        lines = ['"UnlitGeneric"', "{", f'\t"$basetexture" "{path}"', '\t"$translucent" "1"',
+                 '\t"$vertexcolor" "1"', '\t"$vertexalpha" "1"', '\t"$ignorez" "1"', '\t"$no_fullbright" "1"', "}"]
+        write_vmt(path, lines)
+        return
+
     alpha = write_vtf(a.image, path)
     shader = "VertexLitGeneric" if a.type == "model" else "LightmappedGeneric"
     lines = [f'"{shader}"', "{", f'\t"$basetexture" "{path}"', f'\t"$surfaceprop" "{a.surfaceprop}"']
@@ -117,6 +129,10 @@ def main():
     if alpha and a.type == "model":
         lines.append('\t"$translucent" "1"')
     lines.append("}")
+    write_vmt(path, lines)
+
+
+def write_vmt(path, lines):
     vmt = REPO / "game/mod_hl2mp/materials" / (path + ".vmt")
     vmt.write_text("\n".join(lines) + "\n")
     print(f"wrote {vmt.relative_to(REPO)}")

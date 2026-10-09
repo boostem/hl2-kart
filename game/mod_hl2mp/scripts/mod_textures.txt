@@ -224,5 +224,55 @@
 				"width"		"32"
 				"height"	"32"
 		}
+		// Kart held item icons (CKartItemSlot, hl2mp/kart_hud_item.cpp), from
+		// assets_src/textures/hud_items/make_icons.py
+		"kart_item_none"
+		{
+				"file"		"vgui/kart/items/none"
+				"x"		"0"
+				"y"		"0"
+				"width"		"64"
+				"height"	"64"
+		}
+		"kart_item_hubcap"
+		{
+				"file"		"vgui/kart/items/hubcap"
+				"x"		"0"
+				"y"		"0"
+				"width"		"64"
+				"height"	"64"
+		}
+		"kart_item_oil_slick"
+		{
+				"file"		"vgui/kart/items/oil_slick"
+				"x"		"0"
+				"y"		"0"
+				"width"		"64"
+				"height"	"64"
+		}
+		"kart_item_nitro_can"
+		{
+				"file"		"vgui/kart/items/nitro_can"
+				"x"		"0"
+				"y"		"0"
+				"width"		"64"
+				"height"	"64"
+		}
+		"kart_item_seeker"
+		{
+				"file"		"vgui/kart/items/seeker"
+				"x"		"0"
+				"y"		"0"
+				"width"		"64"
+				"height"	"64"
+		}
+		"kart_item_buffer"
+		{
+				"file"		"vgui/kart/items/buffer"
+				"x"		"0"
+				"y"		"0"
+				"width"		"64"
+				"height"	"64"
+		}
 	}	
 }

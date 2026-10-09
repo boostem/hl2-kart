@@ -278,6 +278,7 @@ void CHL2MP_Player::Precache( void )
 	PrecacheScriptSound( "Kart.EngineRev" );
 	PrecacheScriptSound( "Kart.Skid" );
 	PrecacheScriptSound( "Kart.Impact" );
+	PrecacheScriptSound( "Kart.RouletteTick" );
 	PrecacheScriptSound( KART_SOUND_RESPAWN );
 }
 
@@ -1097,6 +1098,15 @@ void CHL2MP_Player::PostThink( void )
 	else
 	{
 		KartItemPostThink();
+
+		if ( kart_debug_server.GetBool() )
+		{
+			Vector vecForward;
+			AngleVectors( QAngle( 0.0f, m_flKartYaw, 0.0f ), &vecForward );
+			Vector vecStart = GetAbsOrigin() + Vector( 0.0f, 0.0f, 24.0f );
+			NDebugOverlay::Line( vecStart, vecStart + vecForward * 128.0f, 255, 255, 0, true, 0.1f );
+			NDebugOverlay::Box( GetAbsOrigin(), KART_HULL_MIN, KART_HULL_MAX, 0, 255, 255, 0, 0.1f );
+		}
 
 		// A checkpoint respawn's freeze is over, unless the race flow holds the karts.
 		if ( m_flKartRespawnUnfreezeTime > 0.0f && gpGlobals->curtime >= m_flKartRespawnUnfreezeTime )

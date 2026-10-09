@@ -12,7 +12,7 @@ Needs `python3`, `ffmpeg` and `lame` on the PATH. `tools/test_assets.sh` is a se
 ## Textures
 
 ```sh
-tools/venv/bin/python tools/img2vtf.py <image> <material path> [--type model|world] [--normal <image>] [--surfaceprop NAME] [--metal]
+tools/venv/bin/python tools/img2vtf.py <image> <material path> [--type model|world|vgui] [--normal <image>] [--surfaceprop NAME] [--metal]
 # e.g.
 tools/venv/bin/python tools/img2vtf.py crate.png props/crate01 --type model --normal crate_n.png
 ```
