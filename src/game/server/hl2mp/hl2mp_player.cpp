@@ -72,6 +72,8 @@ BEGIN_SEND_TABLE_NOBASE( CHL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 	SendPropFloat( SENDINFO( m_flKartSlipAngle ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
 	SendPropFloat( SENDINFO( m_flKartDriftTime ), -1, SPROP_NOSCALE ),
 	SendPropFloat( SENDINFO( m_flKartHopTime ), -1, SPROP_NOSCALE ),
+	SendPropFloat( SENDINFO( m_flKartDriftCharge ), -1, SPROP_NOSCALE ),
+	SendPropFloat( SENDINFO( m_flKartBoostScale ), -1, SPROP_NOSCALE ),
 
 END_SEND_TABLE()
 
@@ -116,6 +118,8 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropInt( SENDINFO( m_nKartDriftDir ), 2 ),	// signed: -1, 0, 1. Everyone gets it, for drift effects on other karts.
 	SendPropInt( SENDINFO( m_nKartSteer ), 2 ),	// signed: -1, 0, 1. Everyone gets it, to turn the wheels of other karts.
 	SendPropModelIndex( SENDINFO( m_nKartDriverModel ) ),
+	SendPropInt( SENDINFO( m_nKartDriftTier ), 2, SPROP_UNSIGNED ),	// 0-3, for mini-turbo spark effects on every kart
+	SendPropFloat( SENDINFO( m_flKartBoostEndTime ), -1, SPROP_NOSCALE ),	// full precision: the local player predicts it
 
 	// kart race state, for everyone's HUD and the bots
 	SendPropInt( SENDINFO( m_nKartLap ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
@@ -206,6 +210,10 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartSlipAngle = 0.0f;
 	m_flKartDriftTime = 0.0f;
 	m_flKartHopTime = 0.0f;
+	m_flKartDriftCharge = 0.0f;
+	m_nKartDriftTier = 0;
+	m_flKartBoostEndTime = 0.0f;
+	m_flKartBoostScale = 1.0f;
 	m_flKartRespawnUnfreezeTime = 0.0f;
 	m_flKartNextRespawnCommand = 0.0f;
 
@@ -754,6 +762,10 @@ void CHL2MP_Player::ResetKartMovement( float flYaw )
 	m_flKartSlipAngle = 0.0f;
 	m_flKartDriftTime = 0.0f;
 	m_flKartHopTime = 0.0f;
+	m_flKartDriftCharge = 0.0f;
+	m_nKartDriftTier = 0;
+	m_flKartBoostEndTime = 0.0f;
+	m_flKartBoostScale = 1.0f;
 	m_bKartWrongWay = false;
 	m_flKartWrongWayTime = 0.0f;
 }

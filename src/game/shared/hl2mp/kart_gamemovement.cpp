@@ -145,10 +145,12 @@ void CKartGameMovement::KartPlayerMove( void )
 //			the server has to reproduce this exactly.
 //			State: m_flKartSpeed, m_flKartYaw, m_flKartReverseTime,
 //			m_flKartBumpCooldown and the hop and drift state (m_nKartDriftDir,
-//			m_flKartSlipAngle, m_flKartDriftTime, m_flKartHopTime) on the player,
-//			all predicted.
+//			m_flKartSlipAngle, m_flKartDriftTime, m_flKartHopTime), the
+//			mini-turbo charge (m_flKartDriftCharge, m_nKartDriftTier) and the boost
+//			(m_flKartBoostEndTime, m_flKartBoostScale) on the player, all predicted.
 //			Tuning: replicated convars, the same value on both sides.
-//			Time: gpGlobals->frametime, which is TICK_INTERVAL on both sides.
+//			Time: gpGlobals->frametime, which is TICK_INTERVAL on both sides, and
+//			gpGlobals->curtime (the boost's end), the predicted tick's time.
 //-----------------------------------------------------------------------------
 void CKartGameMovement::KartMove( void )
 {
@@ -172,12 +174,28 @@ void CKartGameMovement::KartMove( void )
 		bJumpHeld = ( mv->m_nButtons & IN_JUMP ) != 0;
 		bJumpPressed = bJumpHeld && !( mv->m_nOldButtons & IN_JUMP );
 	}
+	else
+	{
+		// Frozen mid-drift (round end, finish): the drift ends without a
+		// mini-turbo, and any boost stops so the kart really coasts.
+		pKart->m_flKartDriftCharge = 0.0f;
+		pKart->m_nKartDriftTier = 0;
+		pKart->m_flKartBoostEndTime = 0.0f;
+	}
 
 	pKart->m_nKartSteer = (int)flSteer;	// only drawn: the wheels and steering wheel turn with it
 
 	float flSpeed = KartUpdateSpeed( pKart->m_flKartSpeed, flThrottle, flFrametime );
 
 	KartUpdateHopAndDrift( flSpeed, flSteer, bJumpHeld, bJumpPressed, bOnGround, flFrametime );
+
+	// Boost (a mini-turbo given just above, boost pads, items): the speed jumps
+	// straight up to the boost's, whatever the throttle. When it ends,
+	// KartUpdateSpeed brings the speed back down to top speed.
+	if ( pKart->IsKartBoosting() )
+	{
+		flSpeed = MAX( flSpeed, kart_max_speed.GetFloat() * pKart->m_flKartBoostScale );
+	}
 
 	// Heading: positive yaw is left, so D (positive sidemove) decreases yaw.
 	float flYaw = pKart->m_flKartYaw;
@@ -293,8 +311,11 @@ void CKartGameMovement::KartMove( void )
 	{
 		flSpeed *= kart_bump_restitution.GetFloat();
 
+		// The drift's charge is lost: no mini-turbo off a wall.
 		pKart->m_nKartDriftDir = 0;
 		pKart->m_flKartDriftTime = 0.0f;
+		pKart->m_flKartDriftCharge = 0.0f;
+		pKart->m_nKartDriftTier = 0;
 
 		if ( pKart->m_flKartBumpCooldown <= 0.0f )
 		{
@@ -324,6 +345,12 @@ void CKartGameMovement::KartMove( void )
 //			drifts the way it is steering, and keeps that direction until jump is
 //			released, the speed drops below the minimum or it bumps a wall (see
 //			KartMove). The direction is the steer sign: +1 right, -1 left.
+//
+//			Mini-turbo: a drift charges m_flKartDriftCharge, faster steering into
+//			it (kart_turbo_charge_max) than against it (kart_turbo_charge_min), and
+//			m_nKartDriftTier is the kart_turbo_tierN_time it has passed. Releasing
+//			jump ends the drift with a boost of that tier's duration. A drift that
+//			ends below the minimum speed (here) or on a bump (KartMove) gives none.
 //
 //			Slip: the slip angle (heading minus velocity yaw) moves toward the
 //			drift's at kart_drift_slip_rate, and back to zero the same way once
@@ -355,6 +382,10 @@ void CKartGameMovement::KartUpdateHopAndDrift( float flSpeed, float flSteer, boo
 
 	if ( nDir != 0 && ( !bJumpHeld || flSpeed < flMinSpeed ) )
 	{
+		if ( !bJumpHeld )
+		{
+			KartReleaseTurbo( pKart->m_nKartDriftTier );
+		}
 		nDir = 0;
 	}
 	else if ( nDir == 0 && bOnGround && bJumpHeld && flSteer != 0.0f && flSpeed >= flMinSpeed )
@@ -365,6 +396,17 @@ void CKartGameMovement::KartUpdateHopAndDrift( float flSpeed, float flSteer, boo
 	pKart->m_nKartDriftDir = nDir;
 	pKart->m_flKartDriftTime = ( nDir != 0 ) ? pKart->m_flKartDriftTime + flFrametime : 0.0f;
 
+	if ( nDir != 0 )
+	{
+		float flChargeRate = RemapVal( flSteer * nDir, -1.0f, 1.0f, kart_turbo_charge_min.GetFloat(), kart_turbo_charge_max.GetFloat() );
+		pKart->m_flKartDriftCharge += flChargeRate * flFrametime;
+	}
+	else
+	{
+		pKart->m_flKartDriftCharge = 0.0f;
+	}
+	pKart->m_nKartDriftTier = KartTurboTier( pKart->m_flKartDriftCharge );
+
 	// Positive yaw is left and +1 is a right drift, which turns the heading to the
 	// right of the velocity: a negative slip angle.
 	float flSlipTarget = -nDir * kart_drift_slip_angle.GetFloat();
@@ -372,12 +414,59 @@ void CKartGameMovement::KartUpdateHopAndDrift( float flSpeed, float flSteer, boo
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: Mini-turbo tier (0 for none, up to 3) a drift charge has reached.
+//-----------------------------------------------------------------------------
+int CKartGameMovement::KartTurboTier( float flCharge )
+{
+	if ( flCharge >= kart_turbo_tier3_time.GetFloat() )
+		return 3;
+	if ( flCharge >= kart_turbo_tier2_time.GetFloat() )
+		return 2;
+	if ( flCharge >= kart_turbo_tier1_time.GetFloat() )
+		return 1;
+	return 0;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The boost for releasing a drift at nTier (none for tier 0).
+//-----------------------------------------------------------------------------
+void CKartGameMovement::KartReleaseTurbo( int nTier )
+{
+	float flDuration;
+	switch ( nTier )
+	{
+	case 1:		flDuration = kart_turbo_tier1_duration.GetFloat(); break;
+	case 2:		flDuration = kart_turbo_tier2_duration.GetFloat(); break;
+	case 3:		flDuration = kart_turbo_tier3_duration.GetFloat(); break;
+	default:	return;
+	}
+
+	GetKartPlayer()->KartGiveBoost( flDuration, kart_boost_scale.GetFloat() );
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: The kart's speed after one tick of throttle (+1 W, -1 S, 0 none).
 //			Signed: negative is reversing. Also runs the reverse delay timer.
+//			Above top speed (a boost just ended) it slows back down to it at
+//			kart_boost_decay whatever the throttle, or harder when braking.
 //-----------------------------------------------------------------------------
 float CKartGameMovement::KartUpdateSpeed( float flSpeed, float flThrottle, float flFrametime )
 {
 	CHL2MP_Player *pKart = GetKartPlayer();
+
+	const float flMaxSpeed = kart_max_speed.GetFloat();
+	if ( flSpeed > flMaxSpeed )
+	{
+		pKart->m_flKartReverseTime = 0.0f;
+
+		float flRate = kart_boost_decay.GetFloat();
+		if ( flThrottle < 0.0f )
+		{
+			flRate = MAX( flRate, kart_brake_decel.GetFloat() );
+		}
+
+		return Approach( flMaxSpeed, flSpeed, flRate * flFrametime );
+	}
 
 	if ( flThrottle > 0.0f )
 	{
@@ -393,7 +482,7 @@ float CKartGameMovement::KartUpdateSpeed( float flSpeed, float flThrottle, float
 		else
 			flRate = kart_accel.GetFloat();
 
-		return Approach( kart_max_speed.GetFloat(), flSpeed, flRate * flFrametime );
+		return Approach( flMaxSpeed, flSpeed, flRate * flFrametime );
 	}
 
 	if ( flThrottle < 0.0f )

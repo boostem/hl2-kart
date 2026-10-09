@@ -113,7 +113,16 @@ public:
 	int GetKartSteer( void ) const { return m_nKartSteer; }
 	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
 	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
-	// Stops the kart and clears its drift and hop, heading flYaw.
+	float GetKartDriftCharge( void ) const { return m_flKartDriftCharge; }
+	int GetKartDriftTier( void ) const { return m_nKartDriftTier; }
+
+	// Kart boost (drift mini-turbos, boost pads, items). Shared, see hl2mp_player_shared.cpp.
+	bool IsKartBoosting( void ) const { return gpGlobals->curtime < m_flKartBoostEndTime; }
+	float GetKartBoostEndTime( void ) const { return m_flKartBoostEndTime; }
+	float GetKartBoostScale( void ) const { return m_flKartBoostScale; }
+	void KartGiveBoost( float flDuration, float flSpeedScale );
+
+	// Stops the kart and clears its drift, hop, drift charge and boost, heading flYaw.
 	void ResetKartMovement( float flYaw );
 	// Moves the kart to vecOrigin, stopped and heading flYaw (kart bots unsticking).
 	void KartTeleport( const Vector &vecOrigin, float flYaw );
@@ -217,6 +226,10 @@ private:
 	CNetworkVar( float, m_flKartSlipAngle );	// heading minus velocity yaw, degrees
 	CNetworkVar( float, m_flKartDriftTime );	// seconds into the current drift
 	CNetworkVar( float, m_flKartHopTime );		// seconds airborne since a hop, 0 when not hopping
+	CNetworkVar( float, m_flKartDriftCharge );	// mini-turbo charge of the current drift, 0 when not drifting
+	CNetworkVar( int, m_nKartDriftTier );		// mini-turbo tier the charge has reached, 0-3
+	CNetworkVar( float, m_flKartBoostEndTime );	// time the current boost ends, in the past when not boosting
+	CNetworkVar( float, m_flKartBoostScale );	// kart_max_speed multiplier of the current boost
 
 	// Kart race state. Only the race manager and the race flow change it.
 	friend class CKartRaceManager;
