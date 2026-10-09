@@ -32,6 +32,7 @@
 
 #include "ilagcompensationmanager.h"
 #include "IEffects.h"
+#include "tier1/fmtstr.h"
 
 int g_iLastCitizenModel = 0;
 int g_iLastCombineModel = 0;
@@ -1329,6 +1330,17 @@ extern ConVar sv_maxunlag;
 
 bool CHL2MP_Player::WantsLagCompensationOnEntity( const CBasePlayer *pPlayer, const CUserCmd *pCmd, const CBitVec<MAX_EDICTS> *pEntityTransmitBits ) const
 {
+	// Karts only rewind around a projectile throw (see KartProj_GetCatchUpTime),
+	// which can go backward on attack2 and whatever the camera faces: every
+	// kart we have been sent, not just the ones in a cone ahead.
+	if ( IsInKart() )
+	{
+		if ( !static_cast< const CHL2MP_Player * >( pPlayer )->IsInKart() )
+			return false;
+
+		return !pEntityTransmitBits || pEntityTransmitBits->Get( pPlayer->entindex() );
+	}
+
 	// No need to lag compensate at all if we're not attacking in this command and
 	// we haven't attacked recently.
 	if ( !( pCmd->buttons & IN_ATTACK ) && (pCmd->command_number - m_iLastWeaponFireUsercmd > 5) )
@@ -2547,7 +2559,8 @@ CON_COMMAND_F_COMPLETION( kart_hit_self, "Hit your own kart as an item would: ka
 	}
 	else
 	{
-		Msg( "Usage: kart_hit_self spin|stun\n" );
+		// To the player's own console, which isn't the server's on a dedicated server.
+		ClientPrint( pPlayer, HUD_PRINTCONSOLE, "Usage: kart_hit_self spin|stun\n" );
 		return;
 	}
 
@@ -2563,6 +2576,6 @@ CON_COMMAND_F_COMPLETION( kart_hit_self, "Hit your own kart as an item would: ka
 		{
 			pszWhy = "still immune from the last hit";
 		}
-		Msg( "[kart] %s was not hit: %s\n", pPlayer->GetPlayerName(), pszWhy );
+		ClientPrint( pPlayer, HUD_PRINTCONSOLE, CFmtStr( "[kart] %s was not hit: %s\n", pPlayer->GetPlayerName(), pszWhy ) );
 	}
 }

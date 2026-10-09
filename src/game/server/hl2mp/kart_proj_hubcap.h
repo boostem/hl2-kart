@@ -14,6 +14,11 @@
 //			the first one swept spins out (KartApplyHit) and the hubcap breaks.
 //			The thrower is safe from its own hubcap for a moment after the throw.
 //
+//			Lag compensated (see KartProj_GetCatchUpTime): a new hubcap first
+//			catches up by the thrower's latency against the karts rewound to
+//			where the thrower saw them, then each tick its reach against a kart
+//			is widened by that kart's latency (KartProj_GetLagSlop).
+//
 //			Networked as a plain CBaseAnimating: the client renders the model
 //			and interpolates the origin and the spin.
 //
@@ -54,6 +59,7 @@ public:
 	static bool Throw( CHL2MP_Player *pThrower, bool bBackward );
 
 private:
+	void CatchUp( CHL2MP_Player *pThrower );
 	void Move( float flTime );
 	CHL2MP_Player *FindKartHit( const Vector &vecStart, const Vector &vecEnd ) const;
 	void Bounce( const Vector &vecNormal, const Vector &vecPos );
