@@ -106,6 +106,10 @@ public:
 	bool IsInKart( void ) const { return m_bKartMode; }
 	float GetKartSpeed( void ) const { return m_flKartSpeed; }
 	float GetKartYaw( void ) const { return m_flKartYaw; }
+	bool IsDrifting( void ) const { return m_nKartDriftDir != 0; }
+	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
+	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
+	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
 
 	// Kart race state (see kart_race_shared.h). The race manager drives it.
 	int GetKartLap( void ) const { return m_nKartLap; }
@@ -120,6 +124,16 @@ public:
 	bool IsKartLateJoin( void ) const { return m_bKartLateJoin; }
 	bool IsKartDNF( void ) const { return m_bKartDNF; }
 	void ResetKartRaceState( void );
+
+	// Kart item (see kart_items.h). Server-authoritative, not predicted.
+	int GetKartItem( void ) const { return m_nKartItem; }
+	int GetKartItemCount( void ) const { return m_nKartItemCount; }
+	int GetKartRouletteItem( void ) const { return m_nKartRouletteItem; }
+	float GetKartRouletteEnd( void ) const { return m_flKartRouletteEnd; }
+	bool IsKartRouletteSpinning( void ) const { return gpGlobals->curtime < m_flKartRouletteEnd; }
+	void KartGiveItem( int item, int nCount, float flRouletteTime );
+	void KartClearItem( void );
+	void KartUseItem( bool bBackward );
 
 	Activity TranslateTeamActivity( Activity ActToTranslate );
 	
@@ -183,6 +197,10 @@ private:
 	CNetworkVar( float, m_flKartYaw );		// heading of the kart body, degrees
 	CNetworkVar( float, m_flKartReverseTime );	// seconds the brake has been held at a standstill
 	CNetworkVar( float, m_flKartBumpCooldown );	// seconds until the next bump sound may play
+	CNetworkVar( int, m_nKartDriftDir );		// drift direction, the steer sign at entry (+1 right, -1 left), 0 when not drifting
+	CNetworkVar( float, m_flKartSlipAngle );	// heading minus velocity yaw, degrees
+	CNetworkVar( float, m_flKartDriftTime );	// seconds into the current drift
+	CNetworkVar( float, m_flKartHopTime );		// seconds airborne since a hop, 0 when not hopping
 
 	// Kart race state. Only the race manager and the race flow change it.
 	friend class CKartRaceManager;
@@ -199,6 +217,14 @@ private:
 	CNetworkVar( bool, m_bKartLateJoin );	// joined while the race ran: no position, races the next one
 	bool m_bKartInRace;		// on the track when the current race started
 	bool m_bKartDNF;		// finished for the player when kart_finish_timeout ran out
+
+	// Kart item state.
+	void KartItemPostThink( void );
+	CNetworkVar( int, m_nKartItem );			// KartItem_t, decided when the box is taken
+	CNetworkVar( int, m_nKartItemCount );		// uses left
+	CNetworkVar( int, m_nKartRouletteItem );	// what the roulette shows, display only
+	CNetworkVar( float, m_flKartRouletteEnd );	// server time the roulette stops
+	float m_flKartRouletteNextStep;				// server time the roulette shows the next item
 
 	float m_flNextModelChangeTime;
 	float m_flNextTeamChangeTime;

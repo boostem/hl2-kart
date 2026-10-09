@@ -79,4 +79,17 @@
 	{
 		"laps"		"byte"		// laps in this race
 	}
+
+	"kart_item_pickup"			// a kart was given an item (the roulette starts)
+	{
+		"userid"	"short"		// user ID of the player
+		"item"		"byte"		// KartItem_t (kart_items.h)
+	}
+
+	"kart_item_use"				// a kart used its held item
+	{
+		"userid"	"short"		// user ID of the player
+		"item"		"byte"		// KartItem_t (kart_items.h)
+		"backward"	"bool"		// thrown backwards
+	}
 }

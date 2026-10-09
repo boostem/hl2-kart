@@ -140,11 +140,13 @@ void CKartGameMovement::KartPlayerMove( void )
 //-----------------------------------------------------------------------------
 // Purpose: One tick of kart physics.
 //
-//			Inputs: the sign of forwardmove (throttle) and sidemove (steer) from
-//			the usercmd. Never client-only convars: the server has to reproduce
-//			this exactly.
-//			State: m_flKartSpeed, m_flKartYaw, m_flKartReverseTime and
-//			m_flKartBumpCooldown on the player, all predicted.
+//			Inputs: the sign of forwardmove (throttle) and sidemove (steer), and
+//			IN_JUMP (hop and drift), from the usercmd. Never client-only convars:
+//			the server has to reproduce this exactly.
+//			State: m_flKartSpeed, m_flKartYaw, m_flKartReverseTime,
+//			m_flKartBumpCooldown and the hop and drift state (m_nKartDriftDir,
+//			m_flKartSlipAngle, m_flKartDriftTime, m_flKartHopTime) on the player,
+//			all predicted.
 //			Tuning: replicated convars, the same value on both sides.
 //			Time: gpGlobals->frametime, which is TICK_INTERVAL on both sides.
 //-----------------------------------------------------------------------------
@@ -154,29 +156,52 @@ void CKartGameMovement::KartMove( void )
 
 	CHL2MP_Player *pKart = GetKartPlayer();
 	const float flFrametime = gpGlobals->frametime;
-	const bool bOnGround = ( player->GetGroundEntity() != NULL );
+	bool bOnGround = ( player->GetGroundEntity() != NULL );	// a hop clears it below
 
 	pKart->m_flKartBumpCooldown = MAX( 0.0f, pKart->m_flKartBumpCooldown - flFrametime );
 
 	// Inputs. A frozen kart gets none and coasts to a stop.
 	float flThrottle = 0.0f;
 	float flSteer = 0.0f;
+	bool bJumpHeld = false;
+	bool bJumpPressed = false;
 	if ( !( player->GetFlags() & FL_FROZEN ) )
 	{
 		flThrottle = KartInputSign( mv->m_flForwardMove );
 		flSteer = KartInputSign( mv->m_flSideMove );
+		bJumpHeld = ( mv->m_nButtons & IN_JUMP ) != 0;
+		bJumpPressed = bJumpHeld && !( mv->m_nOldButtons & IN_JUMP );
 	}
 
 	float flSpeed = KartUpdateSpeed( pKart->m_flKartSpeed, flThrottle, flFrametime );
 
+	KartUpdateHopAndDrift( flSpeed, flSteer, bJumpHeld, bJumpPressed, bOnGround, flFrametime );
+
 	// Heading: positive yaw is left, so D (positive sidemove) decreases yaw.
 	float flYaw = pKart->m_flKartYaw;
-	if ( flSteer != 0.0f )
+	const int nDriftDir = pKart->m_nKartDriftDir;
+	if ( nDriftDir != 0 )
 	{
-		flYaw = AngleNormalize( flYaw - flSteer * KartTurnRate( flSpeed, bOnGround ) * flFrametime );
+		// Drifting: the kart always turns the drift's way. Steering into the drift
+		// tightens the turn, steering against it widens it, no steer is in between.
+		float flRate = RemapVal( flSteer * nDriftDir, -1.0f, 1.0f, kart_drift_turn_min.GetFloat(), kart_drift_turn_max.GetFloat() );
+		if ( !bOnGround )
+		{
+			flRate *= kart_air_turn_scale.GetFloat();
+		}
+		flYaw = AngleNormalize( flYaw - nDriftDir * flRate * flFrametime );
+	}
+	else if ( flSteer != 0.0f )
+	{
+		// A hop steers like the ground, so it can swing the nose into a corner.
+		bool bFullSteer = bOnGround || pKart->m_flKartHopTime > 0.0f;
+		flYaw = AngleNormalize( flYaw - flSteer * KartTurnRate( flSpeed, bFullSteer ) * flFrametime );
 	}
 
-	Vector vecForward = KartForward( flYaw );
+	// The kart moves along its velocity yaw, which lags the heading by the slip
+	// angle in and just after a drift: the kart slides with its nose pointing
+	// into the turn. The body (render) yaw stays the heading.
+	Vector vecMoveDir = KartForward( flYaw - pKart->m_flKartSlipAngle );
 
 	// Keep the base movement angles consistent with the heading for any helper
 	// that reads them (the view angles are never used for movement in a kart).
@@ -184,16 +209,16 @@ void CKartGameMovement::KartMove( void )
 
 	Vector vecStart = mv->GetAbsOrigin();
 
-	// The speed along the heading the move would keep with nothing in the way:
+	// The speed along the velocity yaw the move would keep with nothing in the way:
 	// whatever the collisions take off it is what the bump check looks at.
 	float flExpected;
 
 	if ( bOnGround )
 	{
-		// On the ground the velocity is the heading times the speed, no momentum
-		// sideways: the kart goes where it points.
-		mv->m_vecVelocity.x = vecForward.x * flSpeed;
-		mv->m_vecVelocity.y = vecForward.y * flSpeed;
+		// On the ground the velocity is the velocity yaw times the speed, no
+		// momentum sideways: the kart goes where it points, less the slip.
+		mv->m_vecVelocity.x = vecMoveDir.x * flSpeed;
+		mv->m_vecVelocity.y = vecMoveDir.y * flSpeed;
 		mv->m_vecVelocity.z = 0.0f;
 		flExpected = flSpeed;
 
@@ -219,12 +244,12 @@ void CKartGameMovement::KartMove( void )
 	}
 	else
 	{
-		// Air control: the momentum turns toward the heading, a little each tick,
+		// Air control: the momentum turns toward the velocity yaw, a little each tick,
 		// so the kart can line up a landing without steering like on the ground.
 		float flBlend = clamp( kart_air_control.GetFloat() * flFrametime, 0.0f, 1.0f );
-		mv->m_vecVelocity.x = Lerp( flBlend, mv->m_vecVelocity.x, vecForward.x * flSpeed );
-		mv->m_vecVelocity.y = Lerp( flBlend, mv->m_vecVelocity.y, vecForward.y * flSpeed );
-		flExpected = mv->m_vecVelocity.x * vecForward.x + mv->m_vecVelocity.y * vecForward.y;
+		mv->m_vecVelocity.x = Lerp( flBlend, mv->m_vecVelocity.x, vecMoveDir.x * flSpeed );
+		mv->m_vecVelocity.y = Lerp( flBlend, mv->m_vecVelocity.y, vecMoveDir.y * flSpeed );
+		flExpected = mv->m_vecVelocity.x * vecMoveDir.x + mv->m_vecVelocity.y * vecMoveDir.y;
 
 		StartGravity();
 		TryPlayerMove();
@@ -253,18 +278,21 @@ void CKartGameMovement::KartMove( void )
 	CheckFalling();
 
 	// Wall contact: the speed state follows what the collision left of the
-	// velocity along the heading, so a glancing hit bleeds speed. A hit that
+	// velocity along the velocity yaw, so a glancing hit bleeds speed. A hit that
 	// takes more than kart_bump_threshold off is a bump: the kart keeps only part
-	// of what is left and thuds.
-	float flAlong = mv->m_vecVelocity.x * vecForward.x + mv->m_vecVelocity.y * vecForward.y;
+	// of what is left, thuds and drops out of any drift.
+	float flAlong = mv->m_vecVelocity.x * vecMoveDir.x + mv->m_vecVelocity.y * vecMoveDir.y;
 
 	// On the ground flExpected is flSpeed, so this is flAlong. In the air the
-	// velocity lags the heading; only the collision's share comes off the speed.
+	// velocity trails it (air control); only the collision's share comes off the speed.
 	flSpeed += flAlong - flExpected;
 
 	if ( fabs( flExpected ) - fabs( flAlong ) > kart_bump_threshold.GetFloat() )
 	{
 		flSpeed *= kart_bump_restitution.GetFloat();
+
+		pKart->m_nKartDriftDir = 0;
+		pKart->m_flKartDriftTime = 0.0f;
 
 		if ( pKart->m_flKartBumpCooldown <= 0.0f )
 		{
@@ -280,6 +308,65 @@ void CKartGameMovement::KartMove( void )
 
 	pKart->m_flKartSpeed = flSpeed;
 	pKart->m_flKartYaw = flYaw;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hop and drift state for one tick, before the heading and the move.
+//
+//			Hop: jump pressed (not held over from an earlier tick) on the ground
+//			throws the kart up at kart_hop_velocity; m_flKartHopTime counts its
+//			airtime and clears on landing. There is no hop in the air.
+//
+//			Drift: on the ground (including the tick a hop lands) with jump held,
+//			a steer key down and at least kart_drift_min_speed forward, the kart
+//			drifts the way it is steering, and keeps that direction until jump is
+//			released, the speed drops below the minimum or it bumps a wall (see
+//			KartMove). The direction is the steer sign: +1 right, -1 left.
+//
+//			Slip: the slip angle (heading minus velocity yaw) moves toward the
+//			drift's at kart_drift_slip_rate, and back to zero the same way once
+//			the drift ends, so the kart straightens out instead of snapping.
+//-----------------------------------------------------------------------------
+void CKartGameMovement::KartUpdateHopAndDrift( float flSpeed, float flSteer, bool bJumpHeld, bool bJumpPressed, bool &bOnGround, float flFrametime )
+{
+	CHL2MP_Player *pKart = GetKartPlayer();
+
+	if ( bOnGround )
+	{
+		pKart->m_flKartHopTime = 0.0f;
+
+		if ( bJumpPressed )
+		{
+			mv->m_vecVelocity.z = kart_hop_velocity.GetFloat();
+			SetGroundEntity( NULL );
+			bOnGround = false;
+		}
+	}
+
+	if ( !bOnGround && ( bJumpPressed || pKart->m_flKartHopTime > 0.0f ) )
+	{
+		pKart->m_flKartHopTime += flFrametime;
+	}
+
+	int nDir = pKart->m_nKartDriftDir;
+	const float flMinSpeed = kart_drift_min_speed.GetFloat();
+
+	if ( nDir != 0 && ( !bJumpHeld || flSpeed < flMinSpeed ) )
+	{
+		nDir = 0;
+	}
+	else if ( nDir == 0 && bOnGround && bJumpHeld && flSteer != 0.0f && flSpeed >= flMinSpeed )
+	{
+		nDir = ( flSteer > 0.0f ) ? 1 : -1;
+	}
+
+	pKart->m_nKartDriftDir = nDir;
+	pKart->m_flKartDriftTime = ( nDir != 0 ) ? pKart->m_flKartDriftTime + flFrametime : 0.0f;
+
+	// Positive yaw is left and +1 is a right drift, which turns the heading to the
+	// right of the velocity: a negative slip angle.
+	float flSlipTarget = -nDir * kart_drift_slip_angle.GetFloat();
+	pKart->m_flKartSlipAngle = Approach( flSlipTarget, pKart->m_flKartSlipAngle, kart_drift_slip_rate.GetFloat() * flFrametime );
 }
 
 //-----------------------------------------------------------------------------

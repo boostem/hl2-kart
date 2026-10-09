@@ -54,6 +54,11 @@ protected:
 	// The speed after one tick of throttle, signed (negative is reversing).
 	float			KartUpdateSpeed( float flSpeed, float flThrottle, float flFrametime );
 
+	// Hop and drift state for one tick: starts a hop (which takes the kart off
+	// the ground, so bOnGround can change), enters, keeps or ends the drift and
+	// moves the slip angle toward the drift's.
+	void			KartUpdateHopAndDrift( float flSpeed, float flSteer, bool bJumpHeld, bool bJumpPressed, bool &bOnGround, float flFrametime );
+
 	// Signed steering rate (degrees per second) for a speed.
 	static float	KartTurnRate( float flSpeed, bool bOnGround );
 

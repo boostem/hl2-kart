@@ -17,6 +17,7 @@
 #include "kart_shareddefs.h"
 #include "kart_race_entities.h"
 #include "kart_race_shared.h"
+#include "kart_items.h"
 #include "KeyValues.h"
 #include "team.h"
 #include "weapon_hl2mpbase.h"
@@ -39,6 +40,8 @@ CBaseEntity	 *g_pLastRebelSpawn = NULL;
 extern CBaseEntity				*g_pLastSpawn;
 
 ConVar hl2mp_spawn_frag_fallback_radius( "hl2mp_spawn_frag_fallback_radius", "48", FCVAR_NONE, "If no spawns are available, kill players with this radius to allow new players to spawn." );
+
+extern ConVar kart_debug_server;
 
 #define HL2MP_COMMAND_MAX_RATE 0.3
 
@@ -63,6 +66,9 @@ BEGIN_SEND_TABLE_NOBASE( CHL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 	SendPropFloat( SENDINFO( m_flKartYaw ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
 	SendPropFloat( SENDINFO( m_flKartReverseTime ), -1, SPROP_NOSCALE ),
 	SendPropFloat( SENDINFO( m_flKartBumpCooldown ), -1, SPROP_NOSCALE ),
+	SendPropFloat( SENDINFO( m_flKartSlipAngle ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
+	SendPropFloat( SENDINFO( m_flKartDriftTime ), -1, SPROP_NOSCALE ),
+	SendPropFloat( SENDINFO( m_flKartHopTime ), -1, SPROP_NOSCALE ),
 
 END_SEND_TABLE()
 
@@ -104,6 +110,7 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropInt( SENDINFO( m_iSpawnInterpCounter), 4 ),
 	SendPropInt( SENDINFO( m_iPlayerSoundType), 3 ),
 	SendPropBool( SENDINFO( m_bKartMode ) ),
+	SendPropInt( SENDINFO( m_nKartDriftDir ), 2 ),	// signed: -1, 0, 1. Everyone gets it, for drift effects on other karts.
 
 	// kart race state, for everyone's HUD and the bots
 	SendPropInt( SENDINFO( m_nKartLap ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
@@ -115,6 +122,12 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropFloat( SENDINFO( m_flKartBestLap ), -1, SPROP_NOSCALE ),
 	SendPropFloat( SENDINFO( m_flKartTotalTime ), -1, SPROP_NOSCALE ),
 	SendPropBool( SENDINFO( m_bKartLateJoin ) ),
+
+	// kart item, for everyone's HUD and the bots
+	SendPropInt( SENDINFO( m_nKartItem ), KART_NET_ITEM_BITS, SPROP_UNSIGNED ),
+	SendPropInt( SENDINFO( m_nKartItemCount ), KART_NET_ITEM_COUNT_BITS, SPROP_UNSIGNED ),
+	SendPropInt( SENDINFO( m_nKartRouletteItem ), KART_NET_ITEM_BITS, SPROP_UNSIGNED ),
+	SendPropTime( SENDINFO( m_flKartRouletteEnd ) ),
 	
 	SendPropExclude( "DT_BaseAnimating", "m_flPoseParameter" ),
 	SendPropExclude( "DT_BaseFlex", "m_viewtarget" ),
@@ -181,8 +194,18 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartYaw = 0.0f;
 	m_flKartReverseTime = 0.0f;
 	m_flKartBumpCooldown = 0.0f;
+	m_nKartDriftDir = 0;
+	m_flKartSlipAngle = 0.0f;
+	m_flKartDriftTime = 0.0f;
+	m_flKartHopTime = 0.0f;
 
 	ResetKartRaceState();
+
+	m_nKartItem = KART_ITEM_NONE;
+	m_nKartItemCount = 0;
+	m_nKartRouletteItem = KART_ITEM_NONE;
+	m_flKartRouletteEnd = 0.0f;
+	m_flKartRouletteNextStep = 0.0f;
 
     m_bEnterObserver = false;
 	m_bReady = false;
@@ -426,6 +449,10 @@ void CHL2MP_Player::Spawn(void)
 		m_flKartYaw = GetAbsAngles()[YAW];	// spawn point facing
 		m_flKartReverseTime = 0.0f;
 		m_flKartBumpCooldown = 0.0f;
+		m_nKartDriftDir = 0;
+		m_flKartSlipAngle = 0.0f;
+		m_flKartDriftTime = 0.0f;
+		m_flKartHopTime = 0.0f;
 		m_Local.m_bForceLocalPlayerDraw = true;
 		m_takedamage = DAMAGE_NO;
 		m_Local.m_iHideHUD |= KART_HIDEHUD_BITS;
@@ -714,6 +741,141 @@ void CHL2MP_Player::ResetKartRaceState( void )
 	m_bKartLateJoin = false;
 	m_bKartInRace = false;
 	m_bKartDNF = false;
+
+	// A new race starts empty-handed.
+	KartClearItem();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Gives the kart an item with nCount uses. With a roulette time, the
+//			roulette spins that long first and the item can't be used until it
+//			stops; the item itself is already decided.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::KartGiveItem( int item, int nCount, float flRouletteTime )
+{
+	if ( !KartItem_IsValid( item ) )
+	{
+		KartClearItem();
+		return;
+	}
+
+	m_nKartItem = item;
+	m_nKartItemCount = clamp( nCount, 1, KART_MAX_ITEM_COUNT );
+
+	if ( flRouletteTime > 0.0f )
+	{
+		m_flKartRouletteEnd = gpGlobals->curtime + flRouletteTime;
+		m_nKartRouletteItem = RandomInt( KART_ITEM_NONE + 1, KART_ITEM_COUNT - 1 );
+		m_flKartRouletteNextStep = gpGlobals->curtime + KART_ITEM_ROULETTE_STEP;
+	}
+	else
+	{
+		m_flKartRouletteEnd = gpGlobals->curtime;
+		m_nKartRouletteItem = item;
+	}
+
+	IGameEvent *event = gameeventmanager->CreateEvent( KART_EVENT_ITEM_PICKUP );
+	if ( event )
+	{
+		event->SetInt( "userid", GetUserID() );
+		event->SetInt( "item", item );
+		gameeventmanager->FireEvent( event );
+	}
+}
+
+void CHL2MP_Player::KartClearItem( void )
+{
+	m_nKartItem = KART_ITEM_NONE;
+	m_nKartItemCount = 0;
+	m_nKartRouletteItem = KART_ITEM_NONE;
+	m_flKartRouletteEnd = 0.0f;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Uses the held item once, backwards if asked and the item can be
+//			thrown that way. Nothing while the roulette spins.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::KartUseItem( bool bBackward )
+{
+	int item = m_nKartItem;
+	if ( !KartItem_IsValid( item ) || IsKartRouletteSpinning() )
+		return;
+
+	if ( !kart_items_enabled.GetBool() )
+		return;
+
+	const KartItemInfo_t &info = g_KartItems[item];
+	bBackward = bBackward && info.bBackward;
+
+	if ( !info.Use || !info.Use( this, bBackward ) )
+		return;
+
+	IGameEvent *event = gameeventmanager->CreateEvent( KART_EVENT_ITEM_USE );
+	if ( event )
+	{
+		event->SetInt( "userid", GetUserID() );
+		event->SetInt( "item", item );
+		event->SetBool( "backward", bBackward );
+		gameeventmanager->FireEvent( event );
+	}
+
+	// The use may have changed the item (KartGiveItem/KartClearItem); only
+	// spend it if it is still the one used.
+	if ( m_nKartItem != item )
+		return;
+
+	if ( m_nKartItemCount > 1 )
+	{
+		m_nKartItemCount--;
+	}
+	else
+	{
+		KartClearItem();
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Every command: steps the roulette and reads the use input.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::KartItemPostThink( void )
+{
+	if ( m_nKartItem == KART_ITEM_NONE )
+		return;
+
+	if ( IsKartRouletteSpinning() )
+	{
+		// Cycle through the items, for display.
+		if ( gpGlobals->curtime >= m_flKartRouletteNextStep )
+		{
+			m_flKartRouletteNextStep = gpGlobals->curtime + KART_ITEM_ROULETTE_STEP;
+			int next = m_nKartRouletteItem + 1;
+			if ( next >= KART_ITEM_COUNT )
+			{
+				next = KART_ITEM_NONE + 1;
+			}
+			m_nKartRouletteItem = next;
+		}
+	}
+	else if ( m_nKartRouletteItem != m_nKartItem )
+	{
+		// Stopped: land on the real item.
+		m_nKartRouletteItem = m_nKartItem;
+
+		if ( kart_debug_server.GetBool() )
+		{
+			Msg( "[kart] %s's roulette landed on %s x%d\n", GetPlayerName(), KartItem_GetName( m_nKartItem ), m_nKartItemCount.Get() );
+		}
+	}
+
+	// No items while held on the grid or at the results.
+	if ( !IsAlive() || ( GetFlags() & FL_FROZEN ) )
+		return;
+
+	bool bBackward;
+	if ( KartItem_ReadUseInput( m_nButtons, m_afButtonPressed, bBackward ) )
+	{
+		KartUseItem( bBackward );
+	}
 }
 
 void CHL2MP_Player::ResetAnimation( void )
@@ -790,6 +952,10 @@ void CHL2MP_Player::PostThink( void )
 	if ( !IsInKart() )
 	{
 		m_PlayerAnimState.Update();
+	}
+	else
+	{
+		KartItemPostThink();
 	}
 
 	// Store the eye angles pitch so the client can compute its animation state correctly.

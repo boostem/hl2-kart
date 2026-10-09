@@ -7,6 +7,7 @@
 #include "cbase.h"
 #include "hl2mp_gamerules.h"
 #include "kart_shareddefs.h"
+#include "kart_race_shared.h"
 #include "viewport_panel_names.h"
 #include "gameeventdefs.h"
 #include <KeyValues.h>
@@ -65,6 +66,12 @@ BEGIN_NETWORK_TABLE_NOBASE( CHL2MPRules, DT_HL2MPRules )
 		SendPropBool( SENDINFO( m_bTeamPlayEnabled ) ),
 		SendPropInt( SENDINFO( m_nKartRaceState ), KART_NET_RACE_STATE_BITS, SPROP_UNSIGNED ),
 		SendPropTime( SENDINFO( m_flKartStateEndTime ) ),
+		RecvPropInt( RECVINFO( m_nKartLaps ) ),
+		RecvPropInt( RECVINFO( m_nKartRacers ) ),
+	#else
+		SendPropBool( SENDINFO( m_bTeamPlayEnabled ) ),
+		SendPropInt( SENDINFO( m_nKartLaps ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
+		SendPropInt( SENDINFO( m_nKartRacers ), KART_NET_POSITION_BITS, SPROP_UNSIGNED ),
 	#endif
 
 END_NETWORK_TABLE()
@@ -208,6 +215,9 @@ char *sTeamNames[] =
 
 CHL2MPRules::CHL2MPRules()
 {
+	m_nKartLaps = 0;
+	m_nKartRacers = 0;
+
 #ifndef CLIENT_DLL
 	// Create the team managers
 	for ( int i = 0; i < ARRAYSIZE( sTeamNames ); i++ )

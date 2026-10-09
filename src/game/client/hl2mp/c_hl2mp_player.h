@@ -124,6 +124,10 @@ public:
 	bool IsInKart( void ) const { return m_bKartMode; }
 	float GetKartSpeed( void ) const { return m_flKartSpeed; }
 	float GetKartYaw( void ) const { return m_flKartYaw; }
+	bool IsDrifting( void ) const { return m_nKartDriftDir != 0; }
+	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
+	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
+	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
 
 	// Kart race state (see kart_race_shared.h), networked for every player.
 	int GetKartLap( void ) const { return m_nKartLap; }
@@ -135,6 +139,13 @@ public:
 	float GetKartBestLap( void ) const { return m_flKartBestLap; }
 	float GetKartTotalTime( void ) const { return m_flKartTotalTime; }
 	bool IsKartLateJoin( void ) const { return m_bKartLateJoin; }
+
+	// Kart item (see kart_items.h), networked for every player.
+	int GetKartItem( void ) const { return m_nKartItem; }
+	int GetKartItemCount( void ) const { return m_nKartItemCount; }
+	int GetKartRouletteItem( void ) const { return m_nKartRouletteItem; }
+	float GetKartRouletteEnd( void ) const { return m_flKartRouletteEnd; }
+	bool IsKartRouletteSpinning( void ) const { return gpGlobals->curtime < m_flKartRouletteEnd; }
 
 	// In kart mode: locks the view to the kart heading and strips non-kart input.
 	virtual bool CreateMove( float flInputSampleTime, CUserCmd *pCmd ) OVERRIDE;
@@ -194,6 +205,10 @@ private:
 	float	m_flKartYaw;		// heading of the kart body, degrees
 	float	m_flKartReverseTime;	// seconds the brake has been held at a standstill
 	float	m_flKartBumpCooldown;	// seconds until the next bump sound may play
+	int		m_nKartDriftDir;	// drift direction, the steer sign at entry (+1 right, -1 left), 0 when not drifting
+	float	m_flKartSlipAngle;	// heading minus velocity yaw, degrees
+	float	m_flKartDriftTime;	// seconds into the current drift
+	float	m_flKartHopTime;	// seconds airborne since a hop, 0 when not hopping
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
 
 	// Kart race state, from the server's race manager.
@@ -206,6 +221,12 @@ private:
 	float	m_flKartBestLap;
 	float	m_flKartTotalTime;
 	bool	m_bKartLateJoin;
+
+	// Kart item, from the server.
+	int		m_nKartItem;
+	int		m_nKartItemCount;
+	int		m_nKartRouletteItem;
+	float	m_flKartRouletteEnd;
 
 	CSoundPatch	*m_pKartEngineIdle;
 	CSoundPatch	*m_pKartEngineRev;
