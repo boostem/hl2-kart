@@ -121,6 +121,7 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropTime( SENDINFO( m_flKartLapStartTime ) ),
 	SendPropFloat( SENDINFO( m_flKartBestLap ), -1, SPROP_NOSCALE ),
 	SendPropFloat( SENDINFO( m_flKartTotalTime ), -1, SPROP_NOSCALE ),
+	SendPropBool( SENDINFO( m_bKartLateJoin ) ),
 
 	// kart item, for everyone's HUD and the bots
 	SendPropInt( SENDINFO( m_nKartItem ), KART_NET_ITEM_BITS, SPROP_UNSIGNED ),
@@ -472,13 +473,19 @@ void CHL2MP_Player::Spawn(void)
 
 	m_impactEnergyScale = HL2MPPLAYER_PHYSDAMAGE_SCALE;
 
-	if ( HL2MPRules()->IsIntermission() )
+	// Karts are also held on the grid during the countdown and at the results.
+	if ( HL2MPRules()->IsIntermission() || ( IsInKart() && HL2MPRules()->IsKartRaceFrozen() ) )
 	{
 		AddFlag( FL_FROZEN );
 	}
 	else
 	{
 		RemoveFlag( FL_FROZEN );
+	}
+
+	if ( IsInKart() && !IsObserver() )
+	{
+		HL2MPRules()->OnKartSpawned( this );
 	}
 
 	m_iSpawnInterpCounter = (m_iSpawnInterpCounter + 1) % 8;
@@ -740,8 +747,9 @@ void CHL2MP_Player::ApplyKartColor( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Back to the start of the race: lap 0, waiting for the line. Kept
-//			across respawns; the race manager and kart_race_reset call this.
+// Purpose: Back to the start of the race: lap 0, waiting for the line, and in
+//			the next race. Kept across respawns; the race manager, the race
+//			flow and kart_race_reset call this.
 //-----------------------------------------------------------------------------
 void CHL2MP_Player::ResetKartRaceState( void )
 {
@@ -754,6 +762,12 @@ void CHL2MP_Player::ResetKartRaceState( void )
 	m_flKartBestLap = 0.0f;
 	m_flKartTotalTime = 0.0f;
 	m_flKartFinishTime = 0.0f;
+	m_bKartLateJoin = false;
+	m_bKartInRace = false;
+	m_bKartDNF = false;
+
+	// A new race starts empty-handed.
+	KartClearItem();
 }
 
 //-----------------------------------------------------------------------------
@@ -877,7 +891,8 @@ void CHL2MP_Player::KartItemPostThink( void )
 		}
 	}
 
-	if ( !IsAlive() )
+	// No items while held on the grid or at the results.
+	if ( !IsAlive() || ( GetFlags() & FL_FROZEN ) )
 		return;
 
 	bool bBackward;

@@ -132,14 +132,23 @@ public:
 	// Every tick: each kart's progress, then the race positions.
 	void RaceThink( void );
 
-	// OnRaceStart is fired by the race flow (later tickets); OnRaceFinish when
-	// the first kart finishes.
+	// The race flow's GO: fires OnRaceStart.
+	void StartRace( void );
+
+	// kart_finish_timeout ran out: finishes every kart still racing, in its
+	// current race order, as did-not-finish.
+	void FinishStragglers( void );
+
+	// A kart player taking part in the race: in a kart, on a team and not a
+	// late joiner waiting for the next race.
+	static bool IsRacing( CHL2MP_Player *pPlayer );
+
+	// OnRaceStart is fired at the race flow's GO; OnRaceFinish when the first
+	// kart finishes.
 	COutputEvent m_OnRaceStart;
 	COutputEvent m_OnRaceFinish;
 
 private:
-	// A kart player taking part in the race: in a kart and on a team.
-	static bool IsRacing( CHL2MP_Player *pPlayer );
 
 	// Route position of checkpoint 'index', or -1 when it isn't on the route.
 	int RoutePosition( int index ) const;
@@ -148,7 +157,7 @@ private:
 
 	void UpdateProgress( CHL2MP_Player *pPlayer );
 	void UpdatePositions( void );
-	void FinishRace( CHL2MP_Player *pPlayer );
+	void FinishRace( CHL2MP_Player *pPlayer, bool bDNF );
 
 	int m_iLaps;
 	string_t m_iszTrackName;
@@ -177,6 +186,10 @@ CKartRaceManager *KartRaceManager( void );
 // The grid slot a kart player should spawn on, or NULL when the map has no
 // kart_start or every slot is taken (the caller falls back to stock spawns).
 CBaseEntity *KartRace_SelectGridSpawn( CHL2MP_Player *pPlayer );
+
+// Respawns these players on the grid in this order: the first on the lowest
+// slot, whoever stands where. Players past the last slot spawn as usual.
+void KartRace_RespawnOnGrid( const CUtlVector< CHL2MP_Player * > &order );
 
 // Prints console warnings for a broken race setup. Silent on maps without any
 // race entity.
