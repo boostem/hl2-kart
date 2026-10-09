@@ -15,7 +15,7 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
-ConVar kart_debug_server( "kart_debug_server", "0", 0, "Draw kart race checkpoints, the finish line and grid slots with debug overlays, and log checkpoint touches." );
+ConVar kart_debug_server( "kart_debug_server", "0", 0, "1: draw kart race checkpoints, the finish line and grid slots with debug overlays, and log checkpoint touches. 2: also draw the bots' racing line." );
 
 // How often the debug overlays are redrawn, in seconds.
 #define KART_DEBUG_DRAW_INTERVAL	0.25f
@@ -252,6 +252,7 @@ void CKartRaceManager::Activate( void )
 
 	// Every map entity has spawned by now (on map load and for ent_create alike).
 	CollectCheckpoints();
+	BuildRacingLine();
 	KartRace_ValidateMap();
 
 	SetThink( &CKartRaceManager::RaceThink );
@@ -307,6 +308,11 @@ void CKartRaceManager::CollectCheckpoints( void )
 		point.dir = m_Route[( i + 1 ) % m_Route.Count()].center - point.center;
 		point.length = VectorNormalize( point.dir );
 	}
+}
+
+void CKartRaceManager::BuildRacingLine( void )
+{
+	m_RacingLine.Build( HasRoute() ? &m_Route[0].center : NULL );
 }
 
 CKartCheckpoint *CKartRaceManager::GetCheckpoint( int i ) const
@@ -590,7 +596,7 @@ void KartRace_ValidateMap( void )
 	GatherStarts( starts );
 
 	// No race entities at all: a free-drive map, nothing to say.
-	if ( !KartRaceManager() && !checkpoints.Count() && !starts.Count() )
+	if ( !KartRaceManager() && !checkpoints.Count() && !starts.Count() && !CKartRacingLine::CountMapNodes() )
 		return;
 
 	if ( !KartRaceManager() )
@@ -743,7 +749,15 @@ private:
 		}
 
 		CKartRaceManager *pManager = KartRaceManager();
-		if ( !pManager || !pManager->HasRoute() )
+		if ( !pManager )
+			return;
+
+		if ( kart_debug_server.GetInt() >= 2 )
+		{
+			DrawRacingLine( pManager->GetRacingLine(), flDuration );
+		}
+
+		if ( !pManager->HasRoute() )
 			return;
 
 		// The route progress is measured along.
@@ -763,6 +777,50 @@ private:
 			Q_snprintf( szText, sizeof( szText ), "P%d  lap %d/%d  next %d  %.3f%s", pPlayer->GetKartRacePosition(), pPlayer->GetKartLap(), pManager->GetLaps(),
 				pPlayer->GetKartNextCheckpoint(), pPlayer->GetKartProgress(), pPlayer->IsKartFinished() ? "  finished" : "" );
 			NDebugOverlay::EntityTextAtPosition( pPlayer->GetAbsOrigin() + Vector( 0, 0, KART_HULL_MAX.z + 16.0f ), 0, szText, flDuration );
+		}
+	}
+
+	// The spline in green, the width bounds either side of it and each node.
+	void DrawRacingLine( const CKartRacingLine &line, float flDuration )
+	{
+		if ( !line.IsValid() )
+			return;
+
+		char szText[96];
+		const Vector vecUp( 0, 0, 1 );
+
+		for ( int i = 0; i < line.GetSampleCount(); i++ )
+		{
+			const KartRacingLinePoint_t &a = line.GetSample( i );
+			const KartRacingLinePoint_t &b = line.GetSample( ( i + 1 ) % line.GetSampleCount() );
+
+			Vector vecRightA = CrossProduct( a.dir, vecUp );
+			Vector vecRightB = CrossProduct( b.dir, vecUp );
+			VectorNormalize( vecRightA );
+			VectorNormalize( vecRightB );
+
+			NDebugOverlay::Line( a.pos, b.pos, 0, 255, 0, true, flDuration );
+			NDebugOverlay::Line( a.pos + vecRightA * a.width, b.pos + vecRightB * b.width, 0, 128, 0, true, flDuration );
+			NDebugOverlay::Line( a.pos - vecRightA * a.width, b.pos - vecRightB * b.width, 0, 128, 0, true, flDuration );
+		}
+
+		for ( int i = 0; i < line.GetNodeCount(); i++ )
+		{
+			CKartPathNode *pNode = line.GetNode( i );
+			if ( !pNode )
+				continue;
+
+			KartRacingLinePoint_t point;
+			line.GetPoint( line.GetNodeDistance( i ), point );
+			Vector vecRight = CrossProduct( point.dir, vecUp );
+			VectorNormalize( vecRight );
+
+			NDebugOverlay::Cross3D( pNode->GetAbsOrigin(), 12.0f, 0, 255, 0, true, flDuration );
+			NDebugOverlay::Line( pNode->GetAbsOrigin() - vecRight * pNode->GetWidth(), pNode->GetAbsOrigin() + vecRight * pNode->GetWidth(), 0, 255, 0, true, flDuration );
+
+			Q_snprintf( szText, sizeof( szText ), "%s%s  w %.0f  speed %.2f%s", i == 0 ? "start  " : "", pNode->GetDebugName(), pNode->GetWidth(),
+				pNode->GetSpeedScale(), pNode->IsDriftHint() ? "  drift" : "" );
+			NDebugOverlay::Text( pNode->GetAbsOrigin() + Vector( 0, 0, 24 ), szText, false, flDuration );
 		}
 	}
 
@@ -799,6 +857,27 @@ CON_COMMAND( kart_race_dump, "Print the kart race setup parsed from the map (lap
 		Msg( "  %2d: %-15s index %2d  '%s'  at (%.0f %.0f %.0f)\n", i, pCheckpoint->GetClassname(), pCheckpoint->GetIndex(),
 			pCheckpoint->GetEntityName() != NULL_STRING ? STRING( pCheckpoint->GetEntityName() ) : "",
 			vecCenter.x, vecCenter.y, vecCenter.z );
+	}
+
+	pManager->BuildRacingLine();
+	const CKartRacingLine &line = pManager->GetRacingLine();
+	if ( line.IsValid() )
+	{
+		Msg( "[kart] Racing line: %d nodes, %.0f units, %d samples:\n", line.GetNodeCount(), line.GetLength(), line.GetSampleCount() );
+		for ( int i = 0; i < line.GetNodeCount(); i++ )
+		{
+			CKartPathNode *pNode = line.GetNode( i );
+			if ( !pNode )
+				continue;
+
+			const Vector &vecOrigin = pNode->GetAbsOrigin();
+			Msg( "  %2d: '%s'  at %6.0f  width %4.0f  speed %.2f%s  (%.0f %.0f %.0f)\n", i, pNode->GetDebugName(), line.GetNodeDistance( i ),
+				pNode->GetWidth(), pNode->GetSpeedScale(), pNode->IsDriftHint() ? "  drift" : "", vecOrigin.x, vecOrigin.y, vecOrigin.z );
+		}
+	}
+	else
+	{
+		Msg( "[kart] No racing line (%d kart_path_node on the map).\n", CKartRacingLine::CountMapNodes() );
 	}
 
 	KartRace_ValidateMap();

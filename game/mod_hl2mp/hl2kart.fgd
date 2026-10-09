@@ -3,7 +3,8 @@
 //
 // Includes the stock hl2mp FGD (hl2mp.fgd, which itself includes halflife2.fgd),
 // so both must sit in the same folder as this file (the SDK's bin folder).
-// Keep this file in sync with src/game/server/hl2mp/kart_race_entities.cpp:
+// Keep this file in sync with src/game/server/hl2mp/kart_race_entities.cpp and
+// kart_racing_line.cpp:
 // every keyvalue, input and output in the code must be listed here.
 //=============================================================================
 
@@ -34,4 +35,17 @@
 @SolidClass base(Trigger) color(255 0 128) = kart_finish :
 	"The start/finish line. Always checkpoint 0 (its index is set automatically). Make it span the whole track width and be tall. Place exactly one."
 [
+]
+
+@PointClass base(Targetname) color(0 255 0) size(-8 -8 -8, 8 8 8) line(0 255 0, targetname, next) = kart_path_node :
+	"A point on the racing line bots follow. Chain the nodes into one closed loop in driving direction by setting each node's 'Next node' to the following one, the last back to the first. Place them along the line a good driver takes, about every 300-500 units on straights and closer through corners, at kart height above the road. The line starts at the node nearest the kart_finish. kart_debug_server 2 draws it."
+[
+	next(target_destination) : "Next node" : "" : "The kart_path_node that follows this one in driving direction."
+	width(float) : "Width" : "128" : "How far, in units, a bot may stray from the line either side here (for overtaking and avoiding karts). Keep it inside the walls."
+	speed_scale(float) : "Speed scale" : "1.0" : "Fraction of top speed bots aim for here, 0.1 to 1. Lower it for hairpins."
+	drift(choices) : "Drift" : 0 : "Hint that bots should drift through the corner starting at this node." =
+	[
+		0 : "No"
+		1 : "Yes"
+	]
 ]
