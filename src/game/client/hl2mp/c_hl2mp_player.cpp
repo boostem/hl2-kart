@@ -524,6 +524,15 @@ void C_HL2MP_Player::DrawKartDebugOverlay( void )
 	DebugRow( "steer", "%d (D=+1, A=-1)", nSteer );
 	DebugRow( "pred errors", "set cl_showerror 1 to log them" );
 
+	// Drift and boost state
+	DebugRow( "drifting", "%s", m_nKartDriftDir > 0 ? "right" : ( m_nKartDriftDir < 0 ? "left" : "no" ) );
+	DebugRow( "slip angle", "%.1f", m_flKartSlipAngle );
+	DebugRow( "drift time", "%.2f", m_flKartDriftTime );
+	DebugRow( "charge/tier", "%.2f / %d", m_flKartDriftCharge, m_nKartDriftTier );
+	DebugRow( "boost left", "%.2f", MAX( 0.0f, m_flKartBoostEndTime - gpGlobals->curtime ) );
+	DebugRow( "boost scale", "%.2f", IsKartBoosting() ? m_flKartBoostScale : 1.0f );
+	DebugRow( "hop airtime", "%.2f", m_flKartHopTime );
+
 	// Race state
 	CHL2MPRules *pRules = HL2MPRules();
 	int nLaps = pRules ? pRules->GetKartLaps() : 0;
