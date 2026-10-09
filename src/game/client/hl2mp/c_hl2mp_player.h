@@ -118,6 +118,11 @@ public:
 	void StopWalking( void );
 	bool IsWalking( void ) { return m_fIsWalking; }
 
+	// Kart mode: the player entity is the kart. Latched by the server at spawn.
+	bool IsInKart( void ) const { return m_bKartMode; }
+	float GetKartSpeed( void ) const { return m_flKartSpeed; }
+	float GetKartYaw( void ) const { return m_flKartYaw; }
+
 	virtual void PostThink( void );
 
 private:
@@ -161,6 +166,11 @@ private:
 	CNetworkVar( HL2MPPlayerState, m_iPlayerState );	
 
 	bool m_fIsWalking = false;
+
+	bool	m_bKartMode;
+	float	m_flKartSpeed;		// forward speed along the kart's yaw, u/s
+	float	m_flKartYaw;		// heading of the kart body, degrees
+	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
 };
 
 inline C_HL2MP_Player *ToHL2MPPlayer( CBaseEntity *pEntity )

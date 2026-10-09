@@ -10,6 +10,7 @@
 #include "view.h"
 #include "takedamageinfo.h"
 #include "hl2mp_gamerules.h"
+#include "kart_shareddefs.h"
 #include "in_buttons.h"
 #include "iviewrender_beams.h"			// flashlight beam
 #include "r_efx.h"
@@ -35,6 +36,9 @@ BEGIN_RECV_TABLE_NOBASE( C_HL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 
 	RecvPropFloat( RECVINFO( m_angEyeAngles[0] ) ),
 	RecvPropFloat( RECVINFO( m_angEyeAngles[1] ) ),
+
+	RecvPropFloat( RECVINFO( m_flKartSpeed ) ),
+	RecvPropFloat( RECVINFO( m_flKartYaw ) ),
 END_RECV_TABLE()
 
 // all players except the local player
@@ -44,6 +48,9 @@ BEGIN_RECV_TABLE_NOBASE( C_HL2MP_Player, DT_HL2MPNonLocalPlayerExclusive )
 
 	RecvPropFloat( RECVINFO( m_angEyeAngles[0] ) ),
 	RecvPropFloat( RECVINFO( m_angEyeAngles[1] ) ),
+
+	RecvPropFloat( RECVINFO( m_flKartSpeed ) ),
+	RecvPropFloat( RECVINFO( m_flKartYaw ) ),
 END_RECV_TABLE()
 
 IMPLEMENT_CLIENTCLASS_DT(C_HL2MP_Player, DT_HL2MP_Player, CHL2MP_Player)
@@ -53,12 +60,17 @@ IMPLEMENT_CLIENTCLASS_DT(C_HL2MP_Player, DT_HL2MP_Player, CHL2MP_Player)
 	RecvPropEHandle( RECVINFO( m_hRagdoll ) ),
 	RecvPropInt( RECVINFO( m_iSpawnInterpCounter ) ),
 	RecvPropInt( RECVINFO( m_iPlayerSoundType) ),
+	RecvPropBool( RECVINFO( m_bKartMode ) ),
 
 	RecvPropBool( RECVINFO( m_fIsWalking ) ),
 END_RECV_TABLE()
 
 BEGIN_PREDICTION_DATA( C_HL2MP_Player )
 	DEFINE_PRED_FIELD( m_fIsWalking, FIELD_BOOLEAN, FTYPEDESC_INSENDTABLE ),
+
+	DEFINE_PRED_FIELD( m_bKartMode, FIELD_BOOLEAN, FTYPEDESC_INSENDTABLE ),
+	DEFINE_PRED_FIELD_TOL( m_flKartSpeed, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.5f ),
+	DEFINE_PRED_FIELD_TOL( m_flKartYaw, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.125f ),
 
 	// misyl: Ammo is server side entities in HL2MP. Not catastrophic to error about.
 	// Just let the server stomp all over us.
@@ -106,6 +118,11 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_iSpawnInterpCounterCache = 0;
 
 	m_angEyeAngles.Init();
+
+	m_bKartMode = false;
+	m_flKartSpeed = 0.0f;
+	m_flKartYaw = 0.0f;
+	m_angKartRenderAngles.Init();
 
 	AddVar( &m_angEyeAngles, &m_iv_angEyeAngles, LATCH_SIMULATION_VAR );
 
@@ -582,7 +599,10 @@ void C_HL2MP_Player::AddEntity( void )
 
 	SetLocalAngles( vTempAngles );
 		
-	m_PlayerAnimState.Update();
+	if ( !IsInKart() )
+	{
+		m_PlayerAnimState.Update();
+	}
 
 	// Zero out model pitch, blending takes care of all of it.
 	SetLocalAnglesDim( X_INDEX, 0 );
@@ -676,6 +696,14 @@ const QAngle& C_HL2MP_Player::GetRenderAngles()
 	if ( IsRagdoll() )
 	{
 		return vec3_angle;
+	}
+	else if ( IsInKart() )
+	{
+		// The kart body faces its own heading, not the eyes. The local player's is
+		// predicted; for everyone else the server's angles are all we have.
+		float flYaw = IsLocalPlayer() ? m_flKartYaw : GetAbsAngles()[YAW];
+		m_angKartRenderAngles.Init( 0.0f, flYaw, 0.0f );
+		return m_angKartRenderAngles;
 	}
 	else
 	{

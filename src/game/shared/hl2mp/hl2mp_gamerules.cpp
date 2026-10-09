@@ -6,6 +6,7 @@
 //=============================================================================//
 #include "cbase.h"
 #include "hl2mp_gamerules.h"
+#include "kart_shareddefs.h"
 #include "viewport_panel_names.h"
 #include "gameeventdefs.h"
 #include <KeyValues.h>
@@ -85,6 +86,27 @@ static HL2MPViewVectors g_HL2MPViewVectors(
 
 	Vector(-16, -16, 0 ),	  //VEC_CROUCH_TRACE_MIN (m_vCrouchTraceMin)
 	Vector( 16,  16,  60 )	  //VEC_CROUCH_TRACE_MAX (m_vCrouchTraceMax)
+);
+
+// Kart mode: the player hull is the kart hull. A kart does not crouch, so the
+// duck hull and crouch trace are the standing hull and the duck view is the view.
+static HL2MPViewVectors g_HL2MPKartViewVectors(
+	KART_VIEW,				  //VEC_VIEW (m_vView) 
+							  
+	KART_HULL_MIN,			  //VEC_HULL_MIN (m_vHullMin)
+	KART_HULL_MAX,			  //VEC_HULL_MAX (m_vHullMax)
+							  					
+	KART_HULL_MIN,			  //VEC_DUCK_HULL_MIN (m_vDuckHullMin)
+	KART_HULL_MAX,			  //VEC_DUCK_HULL_MAX	(m_vDuckHullMax)
+	KART_VIEW,				  //VEC_DUCK_VIEW		(m_vDuckView)
+							  					
+	Vector(-10, -10, -10 ),	  //VEC_OBS_HULL_MIN	(m_vObsHullMin)
+	Vector( 10,  10,  10 ),	  //VEC_OBS_HULL_MAX	(m_vObsHullMax)
+							  					
+	KART_DEAD_VIEW,			  //VEC_DEAD_VIEWHEIGHT (m_vDeadViewHeight)
+
+	KART_HULL_MIN,			  //VEC_CROUCH_TRACE_MIN (m_vCrouchTraceMin)
+	KART_HULL_MAX			  //VEC_CROUCH_TRACE_MAX (m_vCrouchTraceMax)
 );
 
 static const char *s_PreserveEnts[] =
@@ -209,11 +231,14 @@ CHL2MPRules::CHL2MPRules()
 
 const CViewVectors* CHL2MPRules::GetViewVectors()const
 {
-	return &g_HL2MPViewVectors;
+	return GetHL2MPViewVectors();
 }
 
 const HL2MPViewVectors* CHL2MPRules::GetHL2MPViewVectors()const
 {
+	if ( kart_enabled.GetBool() )
+		return &g_HL2MPKartViewVectors;
+
 	return &g_HL2MPViewVectors;
 }
 	
@@ -603,6 +628,11 @@ float CHL2MPRules::FlItemRespawnTime( CItem *pItem )
 //=========================================================
 bool CHL2MPRules::CanHavePlayerItem( CBasePlayer *pPlayer, CBaseCombatWeapon *pItem )
 {
+	// Karts carry no weapons.
+	CHL2MP_Player *pHL2Player = ToHL2MPPlayer( pPlayer );
+	if ( pHL2Player && pHL2Player->IsInKart() )
+		return false;
+
 	if ( weaponstay.GetInt() > 0 )
 	{
 		if ( pPlayer->Weapon_OwnsThisType( pItem->GetClassname(), pItem->GetSubType() ) )
@@ -610,6 +640,20 @@ bool CHL2MPRules::CanHavePlayerItem( CBasePlayer *pPlayer, CBaseCombatWeapon *pI
 	}
 
 	return BaseClass::CanHavePlayerItem( pPlayer, pItem );
+}
+
+//=========================================================
+// CanHaveItem - returns false if the player is not allowed
+// to pick up this item (health, ammo, suit batteries...)
+//=========================================================
+bool CHL2MPRules::CanHaveItem( CBasePlayer *pPlayer, CItem *pItem )
+{
+	// Karts have no suit, health or ammo to top up.
+	CHL2MP_Player *pHL2Player = ToHL2MPPlayer( pPlayer );
+	if ( pHL2Player && pHL2Player->IsInKart() )
+		return false;
+
+	return BaseClass::CanHaveItem( pPlayer, pItem );
 }
 
 #endif
@@ -761,6 +805,13 @@ void CHL2MPRules::ClientSettingsChanged( CBasePlayer *pPlayer )
 
 	if ( pHL2Player == NULL )
 		return;
+
+	// In a kart the model is the kart, whatever cl_playermodel says: don't re-apply it.
+	if ( pHL2Player->IsInKart() )
+	{
+		BaseClass::ClientSettingsChanged( pPlayer );
+		return;
+	}
 
 	const char *pCurrentModel = modelinfo->GetModelName( pPlayer->GetModel() );
 	const char *szModelName = engine->GetClientConVarValue( engine->IndexOfEdict( pPlayer->edict() ), "cl_playermodel" );

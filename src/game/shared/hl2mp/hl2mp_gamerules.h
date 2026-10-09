@@ -128,6 +128,7 @@ public:
 	virtual QAngle VecItemRespawnAngles( CItem *pItem );
 	virtual float	FlItemRespawnTime( CItem *pItem );
 	virtual bool	CanHavePlayerItem( CBasePlayer *pPlayer, CBaseCombatWeapon *pItem );
+	virtual bool	CanHaveItem( CBasePlayer *pPlayer, CItem *pItem );
 	virtual bool FShouldSwitchWeapon( CBasePlayer *pPlayer, CBaseCombatWeapon *pWeapon );
 
 	void	AddLevelDesignerPlacedObject( CBaseEntity *pEntity );
