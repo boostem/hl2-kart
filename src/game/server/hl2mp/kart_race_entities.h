@@ -7,6 +7,7 @@
 //			kart_start			a grid slot karts spawn on, ordered by "grid".
 //			kart_checkpoint		brush trigger, "index" 1..N in track order.
 //			kart_finish			brush trigger, the start/finish line (checkpoint 0).
+//			kart_path_node		the bots' racing line (kart_racing_line.h).
 //
 //			A map without them is free drive: karts spawn on the deathmatch spawns
 //			and nothing is timed.
@@ -21,6 +22,7 @@
 
 #include "triggers.h"
 #include "kart_race_shared.h"
+#include "kart_racing_line.h"
 
 class CHL2MP_Player;
 
@@ -109,6 +111,18 @@ public:
 	int GetRouteCount( void ) const { return m_Route.Count(); }
 	const Vector &GetRouteCenter( int i ) const { return m_Route[i].center; }
 
+	// Rebuilds the racing line from the kart_path_node chain, starting at the
+	// node nearest the start/finish line.
+	void BuildRacingLine( void );
+	const CKartRacingLine &GetRacingLine( void ) const { return m_RacingLine; }
+	bool HasRacingLine( void ) const { return m_RacingLine.IsValid(); }
+	float GetRacingLineLength( void ) const { return m_RacingLine.GetLength(); }
+
+	// The racing line point flDistance along the lap (wrapping), and the point
+	// on it nearest vecPos. False when the map has no racing line.
+	bool GetRacingLinePoint( float flDistance, KartRacingLinePoint_t &point ) const { return m_RacingLine.GetPoint( flDistance, point ); }
+	bool GetNearestRacingLinePoint( const Vector &vecPos, KartRacingLinePoint_t &point ) const { return m_RacingLine.GetNearestPoint( vecPos, point ); }
+
 	// A kart player entered checkpoint 'index' (KART_FINISH_INDEX for the line).
 	void OnKartTouchedCheckpoint( CHL2MP_Player *pPlayer, int index );
 
@@ -151,6 +165,8 @@ private:
 		float	length;		// length of the segment starting here
 	};
 	CUtlVector< RoutePoint_t > m_Route;
+
+	CKartRacingLine m_RacingLine;
 
 	bool m_bSomeoneFinished;	// OnRaceFinish has fired
 };
