@@ -161,6 +161,8 @@ private:
 	CNetworkVar( int, m_iSpawnInterpCounter );
 	CNetworkVar( int, m_iPlayerSoundType );
 
+	// The kart movement is the only thing that drives the kart state after spawn.
+	friend class CKartGameMovement;
 	CNetworkVar( bool, m_bKartMode );
 	CNetworkVar( float, m_flKartSpeed );	// forward speed along the kart's yaw, u/s
 	CNetworkVar( float, m_flKartYaw );		// heading of the kart body, degrees

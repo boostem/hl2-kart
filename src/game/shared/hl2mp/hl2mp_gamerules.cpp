@@ -226,6 +226,9 @@ CHL2MPRules::CHL2MPRules()
 	m_bAwaitingReadyRestart = false;
 	m_bChangelevelDone = false;
 
+	// Kart movement tuning lives in a cfg so it can be changed without a rebuild.
+	engine->ServerCommand( "exec kart_tuning.cfg\n" );
+
 #endif
 }
 

@@ -349,15 +349,12 @@ void C_HL2MP_Player::ClientThink( void )
 	UpdateKartSounds();
 }
 
-// Top speed the engine pitch is mapped to. kart_max_speed is a replicated
-// movement convar; fall back to its default while it doesn't exist.
+// Top speed the engine pitch is mapped to: the replicated movement convar
+// from kart_shareddefs, guarded against a nonsense server value.
 static float KartEngineMaxSpeed( void )
 {
-	static ConVarRef kart_max_speed( "kart_max_speed", true );
-	if ( kart_max_speed.IsValid() && kart_max_speed.GetFloat() > 0.0f )
-		return kart_max_speed.GetFloat();
-
-	return 650.0f;
+	float flMaxSpeed = kart_max_speed.GetFloat();
+	return ( flMaxSpeed > 0.0f ) ? flMaxSpeed : 650.0f;
 }
 
 //-----------------------------------------------------------------------------
@@ -1335,6 +1332,33 @@ void C_HL2MPRagdoll::SetupWeights( const matrix3x4_t *pBoneToWorld, int nFlexWei
 			modelrender->SetViewTarget( GetModelPtr(), GetBody(), tmp );
 		}
 	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Input handling. In kart mode the mouse does nothing and most keys
+//			mean nothing: the view angle sent with every command is the kart's
+//			predicted heading (so the engine's view angles, which in_main.cpp
+//			sets from cmd->viewangles right after this, drop the mouse deltas),
+//			and only the driving keys survive. forwardmove/sidemove stay as the
+//			input system made them; the movement only reads their signs.
+//
+//			Only a live, walking kart is locked: a dead kart spectates and a
+//			noclipping one flies with the normal view, matching
+//			CKartGameMovement::ShouldKartMove().
+//-----------------------------------------------------------------------------
+bool C_HL2MP_Player::CreateMove( float flInputSampleTime, CUserCmd *pCmd )
+{
+	bool bResult = BaseClass::CreateMove( flInputSampleTime, pCmd );
+
+	if ( IsInKart() && IsAlive() && GetMoveType() == MOVETYPE_WALK )
+	{
+		pCmd->buttons &= ( IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP | IN_ATTACK | IN_ATTACK2 | IN_SCORE );
+		pCmd->weaponselect = 0;
+		pCmd->impulse = 0;
+		pCmd->viewangles.Init( 0.0f, m_flKartYaw, 0.0f );
+	}
+
+	return bResult;
 }
 
 void C_HL2MP_Player::PostThink( void )

@@ -24,6 +24,13 @@
 // change it and respawn to switch between kart and stock deathmatch.
 extern ConVar kart_enabled;
 
+// Kart movement tuning, read by CKartGameMovement on both sides. Replicated so
+// prediction matches the server; not cheats, so cfg/kart_tuning.cfg can set them.
+extern ConVar kart_max_speed;
+extern ConVar kart_accel;
+extern ConVar kart_turn_rate;
+extern ConVar kart_turn_min_speed;
+
 // Kart collision hull and eye position. A kart does not crouch, so the duck
 // hull is the standing hull and the duck view is the standing view.
 #define KART_HULL_MIN	Vector( -20, -20, 0 )
