@@ -264,6 +264,7 @@ private:
 	CNetworkVar( int, m_nKartDriftTier );		// mini-turbo tier the charge has reached, 0-3
 	CNetworkVar( float, m_flKartBoostEndTime );	// time the current boost ends, in the past when not boosting
 	CNetworkVar( float, m_flKartBoostScale );	// kart_max_speed multiplier of the current boost
+	CNetworkVector( m_vecKartGroundNormal );	// normal of the ground under the kart, (0,0,1) in the air
 	CNetworkVar( int, m_nKartHitState );		// KartHitType being played out, KART_HIT_NONE when none
 	CNetworkVar( float, m_flKartHitEndTime );	// time the hit ends (and kart_hit_immunity starts counting)
 	CNetworkVar( float, m_flKartBufferEndTime );	// time the buffer runs out, in the past when there is none

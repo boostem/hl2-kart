@@ -71,6 +71,9 @@ protected:
 	// Upward speed for a kart that just left the ground it stood on at vecStart.
 	float			KartLaunchSpeed( const Vector &vecStart );
 
+	// Normal of the ground the kart stands on, (0,0,1) in the air.
+	Vector			KartGroundNormal( void );
+
 	// The kart's forward direction (unit, horizontal) for a heading.
 	static Vector	KartForward( float flYaw );
 

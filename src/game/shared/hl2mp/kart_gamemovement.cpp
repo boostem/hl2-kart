@@ -369,6 +369,9 @@ void CKartGameMovement::KartMove( void )
 
 	pKart->m_flKartSpeed = flSpeed;
 	pKart->m_flKartYaw = flYaw;
+
+	// Only drawn: the client tilts the kart model with it.
+	pKart->m_vecKartGroundNormal = KartGroundNormal();
 }
 
 //-----------------------------------------------------------------------------
@@ -588,6 +591,26 @@ float CKartGameMovement::KartLaunchSpeed( const Vector &vecStart )
 	const Vector &n = pm.plane.normal;
 	float flClimb = -( n.x * mv->m_vecVelocity.x + n.y * mv->m_vecVelocity.y ) / n.z;
 	return MAX( flClimb, 0.0f );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The normal of the ground under the kart, from the same short hull
+//			trace down CategorizePosition grounds it with. Straight up in the air
+//			and on anything too steep to stand on.
+//-----------------------------------------------------------------------------
+Vector CKartGameMovement::KartGroundNormal( void )
+{
+	if ( player->GetGroundEntity() == NULL )
+		return Vector( 0.0f, 0.0f, 1.0f );
+
+	trace_t pm;
+	const Vector &vecOrigin = mv->GetAbsOrigin();
+	TracePlayerBBox( vecOrigin, vecOrigin - Vector( 0.0f, 0.0f, 4.0f ), PlayerSolidMask(), COLLISION_GROUP_PLAYER_MOVEMENT, pm );
+
+	if ( pm.fraction == 1.0f || pm.startsolid || pm.plane.normal.z < 0.7f )
+		return Vector( 0.0f, 0.0f, 1.0f );
+
+	return pm.plane.normal;
 }
 
 //-----------------------------------------------------------------------------
