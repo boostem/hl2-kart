@@ -106,6 +106,10 @@ public:
 	bool IsInKart( void ) const { return m_bKartMode; }
 	float GetKartSpeed( void ) const { return m_flKartSpeed; }
 	float GetKartYaw( void ) const { return m_flKartYaw; }
+	bool IsDrifting( void ) const { return m_nKartDriftDir != 0; }
+	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
+	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
+	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
 
 	// Kart race state (see kart_race_shared.h). The race manager drives it.
 	int GetKartLap( void ) const { return m_nKartLap; }
@@ -191,6 +195,10 @@ private:
 	CNetworkVar( float, m_flKartYaw );		// heading of the kart body, degrees
 	CNetworkVar( float, m_flKartReverseTime );	// seconds the brake has been held at a standstill
 	CNetworkVar( float, m_flKartBumpCooldown );	// seconds until the next bump sound may play
+	CNetworkVar( int, m_nKartDriftDir );		// drift direction, the steer sign at entry (+1 right, -1 left), 0 when not drifting
+	CNetworkVar( float, m_flKartSlipAngle );	// heading minus velocity yaw, degrees
+	CNetworkVar( float, m_flKartDriftTime );	// seconds into the current drift
+	CNetworkVar( float, m_flKartHopTime );		// seconds airborne since a hop, 0 when not hopping
 
 	// Kart race state. Only CKartRaceManager changes it.
 	friend class CKartRaceManager;

@@ -66,6 +66,9 @@ BEGIN_SEND_TABLE_NOBASE( CHL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 	SendPropFloat( SENDINFO( m_flKartYaw ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
 	SendPropFloat( SENDINFO( m_flKartReverseTime ), -1, SPROP_NOSCALE ),
 	SendPropFloat( SENDINFO( m_flKartBumpCooldown ), -1, SPROP_NOSCALE ),
+	SendPropFloat( SENDINFO( m_flKartSlipAngle ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
+	SendPropFloat( SENDINFO( m_flKartDriftTime ), -1, SPROP_NOSCALE ),
+	SendPropFloat( SENDINFO( m_flKartHopTime ), -1, SPROP_NOSCALE ),
 
 END_SEND_TABLE()
 
@@ -107,6 +110,7 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropInt( SENDINFO( m_iSpawnInterpCounter), 4 ),
 	SendPropInt( SENDINFO( m_iPlayerSoundType), 3 ),
 	SendPropBool( SENDINFO( m_bKartMode ) ),
+	SendPropInt( SENDINFO( m_nKartDriftDir ), 2 ),	// signed: -1, 0, 1. Everyone gets it, for drift effects on other karts.
 
 	// kart race state, for everyone's HUD and the bots
 	SendPropInt( SENDINFO( m_nKartLap ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
@@ -189,6 +193,10 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartYaw = 0.0f;
 	m_flKartReverseTime = 0.0f;
 	m_flKartBumpCooldown = 0.0f;
+	m_nKartDriftDir = 0;
+	m_flKartSlipAngle = 0.0f;
+	m_flKartDriftTime = 0.0f;
+	m_flKartHopTime = 0.0f;
 
 	ResetKartRaceState();
 
@@ -440,7 +448,10 @@ void CHL2MP_Player::Spawn(void)
 		m_flKartYaw = GetAbsAngles()[YAW];	// spawn point facing
 		m_flKartReverseTime = 0.0f;
 		m_flKartBumpCooldown = 0.0f;
-		KartClearItem();
+		m_nKartDriftDir = 0;
+		m_flKartSlipAngle = 0.0f;
+		m_flKartDriftTime = 0.0f;
+		m_flKartHopTime = 0.0f;
 		m_Local.m_bForceLocalPlayerDraw = true;
 		m_takedamage = DAMAGE_NO;
 		m_Local.m_iHideHUD |= KART_HIDEHUD_BITS;

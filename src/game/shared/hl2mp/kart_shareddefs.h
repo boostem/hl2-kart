@@ -43,6 +43,12 @@ extern ConVar kart_air_control;
 extern ConVar kart_bump_threshold;
 extern ConVar kart_bump_restitution;
 extern ConVar kart_bump_cooldown;
+extern ConVar kart_hop_velocity;
+extern ConVar kart_drift_min_speed;
+extern ConVar kart_drift_slip_angle;
+extern ConVar kart_drift_turn_min;
+extern ConVar kart_drift_turn_max;
+extern ConVar kart_drift_slip_rate;
 
 // Below this speed (units per second, either way) the kart counts as stopped:
 // holding the brake there starts the reverse delay.
