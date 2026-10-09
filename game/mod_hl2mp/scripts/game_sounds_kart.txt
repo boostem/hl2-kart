@@ -44,3 +44,22 @@
 		"wave"	"vehicles/v8/vehicle_impact_medium4.wav"
 	}
 }
+
+// Race feedback, played to the racing player only (CKartRaceManager)
+"Kart.Checkpoint"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"buttons/blip1.wav"
+}
+
+"Kart.LapComplete"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"buttons/button3.wav"
+}
