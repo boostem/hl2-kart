@@ -210,6 +210,14 @@ public:
 
 	virtual bool StartObserverMode( int mode );
 	virtual void StopObserverMode( void );
+	virtual bool IsValidObserverTarget( CBaseEntity *target );
+	virtual void ValidateCurrentObserverTarget( void );
+
+	// Kart spectating: a kart that has finished the race, or joined while it
+	// ran, watches the karts still driving (chase cam of the leader, attack
+	// keys cycle, jump to free look) until the next race respawns it.
+	bool IsKartSpectating( void );
+	void KartStartSpectating( void );
 
 
 	Vector m_vecTotalBulletForce;	//Accumulator for bullet force in a single frame

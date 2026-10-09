@@ -43,6 +43,15 @@ private:
 	virtual void AddSection(int teamType, int teamNumber); // add a new section header for a team
 
 	int GetSectionFromTeamNumber( int teamNumber );
+
+	// Kart race layout (a race on the map): race standings, no teams.
+	static bool IsKartRace( void );
+	void AddKartHeader( void );
+	void AddKartSection( void );
+	void UpdateKartTeamInfo( void );
+	void GetKartPlayerScoreInfo( int playerIndex, KeyValues *kv );
+	static bool StaticKartSortFunc( vgui::SectionedListPanel *list, int itemID1, int itemID2 );
+	bool m_bKartLayout;	// the sections were built for a kart race
 	enum 
 	{ 
 		CSTRIKE_NAME_WIDTH = 320,
@@ -52,6 +61,16 @@ private:
 		CSTRIKE_PING_WIDTH = 46,
 //		CSTRIKE_VOICE_WIDTH = 40, 
 //		CSTRIKE_FRIENDS_WIDTH = 24,
+	};
+
+	// Kart race columns; they add up to the deathmatch ones.
+	enum
+	{
+		KART_POS_WIDTH = 34,
+		KART_NAME_WIDTH = 214,
+		KART_LAP_WIDTH = 40,
+		KART_TIME_WIDTH = 64,
+		KART_PING_WIDTH = 36,
 	};
 
 	// rounded corners

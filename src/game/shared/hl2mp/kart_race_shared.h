@@ -22,8 +22,8 @@
 //			total time		sum of the completed lap times; the final race
 //							time once finished. The running race time is
 //							total time + ( curtime - lap start time ).
-//			late join		joined while a race was running: drives, but has
-//							no position and no laps until the next race.
+//			late join		joined while a race was running: spectates, has no
+//							position and no laps until the next race.
 //			wrong way		driving against the track for kart_wrongway_time
 //							seconds; cleared once facing forward again.
 //
@@ -76,6 +76,16 @@ enum KartRaceState_t
 	KART_RACE_STATE_COUNT
 };
 #define KART_NET_RACE_STATE_BITS	3
+
+// Race standings flags, per player on the game rules (the scoreboard).
+enum
+{
+	KART_STANDING_RACING	= ( 1 << 0 ),	// a racer (CKartRaceManager::IsRacing): not a late joiner or spectator
+	KART_STANDING_FINISHED	= ( 1 << 1 ),
+	KART_STANDING_DNF		= ( 1 << 2 ),	// finished for them by kart_finish_timeout
+	KART_STANDING_LATE_JOIN	= ( 1 << 3 ),
+};
+#define KART_NET_STANDING_FLAG_BITS	4
 
 inline const char *KartRaceStateName( int state )
 {

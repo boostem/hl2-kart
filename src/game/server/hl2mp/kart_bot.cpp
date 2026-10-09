@@ -621,6 +621,13 @@ void CKartBotSystem::BuildCommand( CHL2MP_Player *pBot, KartBotState_t &st, CUse
 	cmd.random_seed = RandomInt( 0, 0x7fffffff );
 	cmd.viewangles = pBot->EyeAngles();
 
+	// Finished (or joined late) and spectating until the next race.
+	if ( pBot->IsObserver() )
+	{
+		st.bOnLine = false;
+		return;
+	}
+
 	if ( !pBot->IsAlive() )
 	{
 		// Killed from the console: tap jump to respawn.

@@ -441,6 +441,12 @@ void CHL2MP_Player::Spawn(void)
 
 	PickDefaultSpawnTeam();
 
+	// A kart spectator back on the track (the next race's grid respawn).
+	if ( m_iPlayerState == STATE_OBSERVER_MODE && GetTeamNumber() != TEAM_SPECTATOR )
+	{
+		State_Transition( STATE_ACTIVE );
+	}
+
 	BaseClass::Spawn();
 
 	// A respawn keeps its team and so its model: re-apply the model whenever it
@@ -2271,6 +2277,72 @@ void CHL2MP_Player::StopObserverMode()
 {
 	m_bEnterObserver = false;
 	BaseClass::StopObserverMode();
+}
+
+bool CHL2MP_Player::IsKartSpectating( void )
+{
+	return IsInKart() && IsObserver() && GetTeamNumber() != TEAM_SPECTATOR;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The kart leaves the track and watches the race leader. From the race
+//			flow, for karts that finished and for late joiners.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::KartStartSpectating( void )
+{
+	if ( !IsInKart() || IsObserver() || GetTeamNumber() == TEAM_SPECTATOR )
+		return;
+
+	KartClearItem();
+	RemoveFlag( FL_FROZEN );
+
+	State_Transition( STATE_OBSERVER_MODE );
+	if ( !IsObserver() )
+		return;
+
+	// Chase cam whatever cl_spec_mode says: jump switches to free look.
+	CHL2MP_Player *pLeader = HL2MPRules()->GetKartLeader();
+	if ( pLeader )
+	{
+		SetObserverTarget( pLeader );
+	}
+	SetObserverMode( OBS_MODE_CHASE );
+
+	m_Local.m_iHideHUD |= KART_HIDEHUD_BITS;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Kart spectators only watch karts still on the track.
+//-----------------------------------------------------------------------------
+bool CHL2MP_Player::IsValidObserverTarget( CBaseEntity *target )
+{
+	if ( !IsKartSpectating() )
+		return BaseClass::IsValidObserverTarget( target );
+
+	CHL2MP_Player *pKart = ToHL2MPPlayer( target );
+	if ( !pKart || pKart == this || !pKart->IsInKart() || !pKart->IsAlive() || pKart->IsObserver() )
+		return false;
+
+	return !pKart->IsEffectActive( EF_NODRAW );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: When the kart being watched finishes (or leaves), a kart spectator
+//			moves on to the leader; with nobody left driving, it looks around.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::ValidateCurrentObserverTarget( void )
+{
+	if ( !IsKartSpectating() || IsValidObserverTarget( m_hObserverTarget.Get() ) )
+	{
+		BaseClass::ValidateCurrentObserverTarget();
+		return;
+	}
+
+	CHL2MP_Player *pLeader = HL2MPRules()->GetKartLeader();
+	if ( pLeader && SetObserverTarget( pLeader ) )
+		return;
+
+	ForceObserverMode( OBS_MODE_ROAMING );
 }
 
 void CHL2MP_Player::State_Enter_OBSERVER_MODE()
