@@ -1,8 +1,8 @@
 "GameInfo"
 {
-	game	"My First HL2MP Mod"
-	title	"HALF+LIFE'"
-	title2	"deathmatch"
+	game	"HL2 Kart"
+	title	"HL2 KART"
+	title2	""
 	type multiplayer_only
 	nomodels 0
 	nohimodel 1
