@@ -66,6 +66,17 @@
 	{
 		"userid"	"short"		// user ID of the player
 		"position"	"byte"		// finishing position, 1 for the winner
-		"totaltime"	"float"		// race time, seconds
+		"totaltime"	"float"		// race time, seconds (the laps completed so far when dnf)
+		"dnf"		"bool"		// finished for the player when kart_finish_timeout ran out
+	}
+
+	"kart_countdown"			// one tick of the countdown before a race
+	{
+		"seconds"	"byte"		// seconds left until the start: 3, 2, 1
+	}
+
+	"kart_race_start"			// the countdown is over: go
+	{
+		"laps"		"byte"		// laps in this race
 	}
 }

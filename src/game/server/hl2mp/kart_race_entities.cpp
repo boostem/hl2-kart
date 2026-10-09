@@ -159,13 +159,24 @@ static bool IsGridSlotFree( CKartStart *pStart, CHL2MP_Player *pPlayer )
 	return true;
 }
 
+// While KartRace_RespawnOnGrid runs: player i takes slot i.
+static CUtlVector< CHandle< CHL2MP_Player > > s_GridOrder;
+
 CBaseEntity *KartRace_SelectGridSpawn( CHL2MP_Player *pPlayer )
 {
 	CUtlVector< CKartStart * > starts;
 	GatherStarts( starts );
 
+	int iAssigned = s_GridOrder.Find( pPlayer );
+	if ( iAssigned >= 0 && iAssigned < starts.Count() )
+		return starts[iAssigned];
+
 	for ( int i = 0; i < starts.Count(); i++ )
 	{
+		// Slots handed out by KartRace_RespawnOnGrid stay theirs.
+		if ( i < s_GridOrder.Count() )
+			continue;
+
 		if ( IsGridSlotFree( starts[i], pPlayer ) )
 			return starts[i];
 	}
@@ -176,6 +187,22 @@ CBaseEntity *KartRace_SelectGridSpawn( CHL2MP_Player *pPlayer )
 	}
 
 	return NULL;
+}
+
+void KartRace_RespawnOnGrid( const CUtlVector< CHL2MP_Player * > &order )
+{
+	s_GridOrder.RemoveAll();
+	for ( int i = 0; i < order.Count(); i++ )
+	{
+		s_GridOrder.AddToTail( order[i] );
+	}
+
+	for ( int i = 0; i < order.Count(); i++ )
+	{
+		order[i]->ForceRespawn();
+	}
+
+	s_GridOrder.RemoveAll();
 }
 
 // ##################################################################################
@@ -340,7 +367,7 @@ int CKartRaceManager::NextRouteIndex( int index ) const
 bool CKartRaceManager::IsRacing( CHL2MP_Player *pPlayer )
 {
 	return pPlayer && pPlayer->IsConnected() && pPlayer->IsInKart() && !pPlayer->IsHLTV()
-		&& pPlayer->GetTeamNumber() != TEAM_SPECTATOR;
+		&& pPlayer->GetTeamNumber() != TEAM_SPECTATOR && !pPlayer->IsKartLateJoin();
 }
 
 static void KartRace_PlaySound( CHL2MP_Player *pPlayer, const char *pszSound )
@@ -371,7 +398,9 @@ void CKartRaceManager::OnKartTouchedCheckpoint( CHL2MP_Player *pPlayer, int inde
 		DevMsg( "[kart] %s touched checkpoint %d at %.2f (next %d)\n", pPlayer->GetPlayerName(), index, gpGlobals->curtime, pPlayer->m_nKartNextCheckpoint.Get() );
 	}
 
-	if ( !HasRoute() || pPlayer->m_bKartFinished )
+	// Laps only count while the race flow runs a race: not while waiting for
+	// karts, not during the countdown or at the results.
+	if ( !HasRoute() || !IsRacing( pPlayer ) || pPlayer->m_bKartFinished || !HL2MPRules()->IsKartRaceRunning() )
 		return;
 
 	// Out of order (skipped, driven backwards or touched twice): nothing.
@@ -420,7 +449,7 @@ void CKartRaceManager::OnKartTouchedCheckpoint( CHL2MP_Player *pPlayer, int inde
 
 	if ( pPlayer->m_nKartLap >= m_iLaps )
 	{
-		FinishRace( pPlayer );
+		FinishRace( pPlayer, false );
 		return;
 	}
 
@@ -429,7 +458,7 @@ void CKartRaceManager::OnKartTouchedCheckpoint( CHL2MP_Player *pPlayer, int inde
 	pPlayer->m_nKartNextCheckpoint = NextRouteIndex( KART_FINISH_INDEX );
 }
 
-void CKartRaceManager::FinishRace( CHL2MP_Player *pPlayer )
+void CKartRaceManager::FinishRace( CHL2MP_Player *pPlayer, bool bDNF )
 {
 	// Finishers are ranked by when they crossed the line.
 	int nPosition = 1;
@@ -443,9 +472,14 @@ void CKartRaceManager::FinishRace( CHL2MP_Player *pPlayer )
 	}
 
 	pPlayer->m_bKartFinished = true;
+	pPlayer->m_bKartDNF = bDNF;
 	pPlayer->m_flKartFinishTime = gpGlobals->curtime;
-	pPlayer->m_flKartProgress = pPlayer->m_nKartLap + 1.0f;
 	pPlayer->m_nKartRacePosition = nPosition;
+	if ( !bDNF )
+	{
+		// A did-not-finish keeps its progress: it orders the karts finished together.
+		pPlayer->m_flKartProgress = pPlayer->m_nKartLap + 1.0f;
+	}
 
 	IGameEvent *event = gameeventmanager->CreateEvent( KART_EVENT_RACE_FINISH );
 	if ( event )
@@ -453,17 +487,31 @@ void CKartRaceManager::FinishRace( CHL2MP_Player *pPlayer )
 		event->SetInt( "userid", pPlayer->GetUserID() );
 		event->SetInt( "position", nPosition );
 		event->SetFloat( "totaltime", pPlayer->m_flKartTotalTime );
+		event->SetBool( "dnf", bDNF );
 		gameeventmanager->FireEvent( event );
+	}
+
+	if ( bDNF )
+	{
+		Msg( "[kart] %s did not finish, placed %d\n", pPlayer->GetPlayerName(), nPosition );
+		return;
 	}
 
 	Msg( "[kart] %s finished %d in %.2f\n", pPlayer->GetPlayerName(), nPosition, pPlayer->m_flKartTotalTime.Get() );
 
-	// Movement keeps working; the race flow (later tickets) decides what's next.
+	// Movement keeps working; the race flow starts the finish timeout.
 	if ( !m_bSomeoneFinished )
 	{
 		m_bSomeoneFinished = true;
 		m_OnRaceFinish.FireOutput( pPlayer, this );
 	}
+
+	HL2MPRules()->OnKartFinished( pPlayer );
+}
+
+void CKartRaceManager::StartRace( void )
+{
+	m_OnRaceStart.FireOutput( this, this );
 }
 
 void CKartRaceManager::ResetRace( void )
@@ -529,7 +577,8 @@ void CKartRaceManager::UpdateProgress( CHL2MP_Player *pPlayer )
 	pPlayer->m_flKartProgress = pPlayer->m_nKartLap + ( iPrev + t ) / nCount;
 }
 
-// Finishers first, by finish time, then everyone else by progress.
+// Finishers first, by finish time, then everyone else by progress. Karts
+// finished in the same tick (the did-not-finish ones) go by progress too.
 static int RaceOrderSortFunc( CHL2MP_Player * const *a, CHL2MP_Player * const *b )
 {
 	const CHL2MP_Player *pA = *a;
@@ -538,17 +587,37 @@ static int RaceOrderSortFunc( CHL2MP_Player * const *a, CHL2MP_Player * const *b
 	if ( pA->IsKartFinished() != pB->IsKartFinished() )
 		return pA->IsKartFinished() ? -1 : 1;
 
-	if ( pA->IsKartFinished() )
-	{
-		if ( pA->GetKartFinishTime() != pB->GetKartFinishTime() )
-			return pA->GetKartFinishTime() < pB->GetKartFinishTime() ? -1 : 1;
-	}
-	else if ( pA->GetKartProgress() != pB->GetKartProgress() )
-	{
+	if ( pA->IsKartFinished() && pA->GetKartFinishTime() != pB->GetKartFinishTime() )
+		return pA->GetKartFinishTime() < pB->GetKartFinishTime() ? -1 : 1;
+
+	if ( pA->GetKartProgress() != pB->GetKartProgress() )
 		return pA->GetKartProgress() > pB->GetKartProgress() ? -1 : 1;
-	}
 
 	return pA->entindex() - pB->entindex();
+}
+
+void CKartRaceManager::FinishStragglers( void )
+{
+	CUtlVectorFixed< CHL2MP_Player *, MAX_PLAYERS > stragglers;
+
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( IsRacing( pPlayer ) && !pPlayer->m_bKartFinished )
+		{
+			UpdateProgress( pPlayer );
+			stragglers.AddToTail( pPlayer );
+		}
+	}
+
+	stragglers.Sort( RaceOrderSortFunc );
+
+	for ( int i = 0; i < stragglers.Count(); i++ )
+	{
+		FinishRace( stragglers[i], true );
+	}
+
+	UpdatePositions();
 }
 
 void CKartRaceManager::UpdatePositions( void )
@@ -789,6 +858,9 @@ CON_COMMAND( kart_race_dump, "Print the kart race setup parsed from the map (lap
 	const char *pszTrack = pManager->GetTrackName();
 	Msg( "[kart] Track '%s', %d laps, %d checkpoints in order:\n", ( pszTrack && pszTrack[0] ) ? pszTrack : "(unnamed)", pManager->GetLaps(), pManager->GetCheckpointCount() );
 
+	float flStateLeft = HL2MPRules()->GetKartStateEndTime() > 0.0f ? HL2MPRules()->GetKartStateEndTime() - gpGlobals->curtime : 0.0f;
+	Msg( "[kart] Race state %s, %.1fs left\n", KartRaceStateName( HL2MPRules()->GetKartRaceState() ), MAX( flStateLeft, 0.0f ) );
+
 	for ( int i = 0; i < pManager->GetCheckpointCount(); i++ )
 	{
 		CKartCheckpoint *pCheckpoint = pManager->GetCheckpoint( i );
@@ -816,16 +888,26 @@ CON_COMMAND( kart_race_dump, "Print the kart race setup parsed from the map (lap
 			flLapTime = gpGlobals->curtime - pPlayer->GetKartLapStartTime();
 		}
 
+		const char *pszStatus = "";
+		if ( pPlayer->IsKartLateJoin() )
+		{
+			pszStatus = "  late join";
+		}
+		else if ( pPlayer->IsKartFinished() )
+		{
+			pszStatus = pPlayer->IsKartDNF() ? "  dnf" : "  finished";
+		}
+
 		Msg( "  pos %2d  %-24s lap %2d/%d  next %2d  progress %7.3f  lap %7.2fs  best %7.2fs  total %7.2fs%s\n",
 			pPlayer->GetKartRacePosition(), pPlayer->GetPlayerName(), pPlayer->GetKartLap(), pManager->GetLaps(), pPlayer->GetKartNextCheckpoint(),
-			pPlayer->GetKartProgress(), flLapTime, pPlayer->GetKartBestLap(), pPlayer->GetKartTotalTime(), pPlayer->IsKartFinished() ? "  finished" : "" );
+			pPlayer->GetKartProgress(), flLapTime, pPlayer->GetKartBestLap(), pPlayer->GetKartTotalTime(), pszStatus );
 	}
 }
 
 // ##################################################################################
 //	>> kart_race_reset
 // ##################################################################################
-CON_COMMAND( kart_race_reset, "Put every kart back to the start of the race: lap 0, waiting for the start/finish line." )
+CON_COMMAND( kart_race_reset, "Put every kart back to the start of the race where it stands: lap 0, waiting for the start/finish line. A finished race runs again." )
 {
 	if ( !UTIL_IsCommandIssuedByServerAdmin() )
 		return;
@@ -838,5 +920,6 @@ CON_COMMAND( kart_race_reset, "Put every kart back to the start of the race: lap
 	}
 
 	pManager->ResetRace();
+	HL2MPRules()->OnKartRaceReset();
 	Msg( "[kart] Race state reset.\n" );
 }

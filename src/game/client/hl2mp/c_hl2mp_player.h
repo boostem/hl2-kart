@@ -134,6 +134,7 @@ public:
 	float GetKartLapStartTime( void ) const { return m_flKartLapStartTime; }
 	float GetKartBestLap( void ) const { return m_flKartBestLap; }
 	float GetKartTotalTime( void ) const { return m_flKartTotalTime; }
+	bool IsKartLateJoin( void ) const { return m_bKartLateJoin; }
 
 	// In kart mode: locks the view to the kart heading and strips non-kart input.
 	virtual bool CreateMove( float flInputSampleTime, CUserCmd *pCmd ) OVERRIDE;
@@ -204,6 +205,7 @@ private:
 	float	m_flKartLapStartTime;
 	float	m_flKartBestLap;
 	float	m_flKartTotalTime;
+	bool	m_bKartLateJoin;
 
 	CSoundPatch	*m_pKartEngineIdle;
 	CSoundPatch	*m_pKartEngineRev;

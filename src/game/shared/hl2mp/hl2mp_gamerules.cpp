@@ -59,8 +59,12 @@ BEGIN_NETWORK_TABLE_NOBASE( CHL2MPRules, DT_HL2MPRules )
 
 	#ifdef CLIENT_DLL
 		RecvPropBool( RECVINFO( m_bTeamPlayEnabled ) ),
+		RecvPropInt( RECVINFO( m_nKartRaceState ) ),
+		RecvPropTime( RECVINFO( m_flKartStateEndTime ) ),
 	#else
 		SendPropBool( SENDINFO( m_bTeamPlayEnabled ) ),
+		SendPropInt( SENDINFO( m_nKartRaceState ), KART_NET_RACE_STATE_BITS, SPROP_UNSIGNED ),
+		SendPropTime( SENDINFO( m_flKartStateEndTime ) ),
 	#endif
 
 END_NETWORK_TABLE()
@@ -226,10 +230,25 @@ CHL2MPRules::CHL2MPRules()
 	m_bAwaitingReadyRestart = false;
 	m_bChangelevelDone = false;
 
+	m_nKartRaceState = KART_RACE_STATE_NONE;
+	m_flKartStateEndTime = 0.0f;
+	m_iKartCountdownTick = 0;
+	m_bKartRestartPending = false;
+
 	// Kart movement tuning lives in a cfg so it can be changed without a rebuild.
 	engine->ServerCommand( "exec kart_tuning.cfg\n" );
 
 #endif
+}
+
+bool CHL2MPRules::IsKartRaceFrozen( void ) const
+{
+	return GetKartRaceState() == KART_RACE_STATE_COUNTDOWN || GetKartRaceState() == KART_RACE_STATE_RESULTS;
+}
+
+bool CHL2MPRules::IsKartRaceRunning( void ) const
+{
+	return GetKartRaceState() == KART_RACE_STATE_RACING || GetKartRaceState() == KART_RACE_STATE_FINISHING;
 }
 
 const CViewVectors* CHL2MPRules::GetViewVectors()const
@@ -337,10 +356,18 @@ void CHL2MPRules::Think( void )
 		return;
 	}
 
+	// A kart race decides itself when the map ends (after the results), and
+	// karts score no frags.
+	KartRaceThink();
+	if ( g_fGameOver )
+		return;
+
+	bool bKartRace = ( GetKartRaceState() != KART_RACE_STATE_NONE );
+
 //	float flTimeLimit = mp_timelimit.GetFloat() * 60;
-	float flFragLimit = fraglimit.GetFloat();
+	float flFragLimit = kart_enabled.GetBool() ? 0.0f : fraglimit.GetFloat();
 	
-	if ( GetMapRemainingTime() < 0 )
+	if ( !bKartRace && GetMapRemainingTime() < 0 )
 	{
 		GoToIntermission();
 		return;
@@ -890,6 +917,9 @@ int CHL2MPRules::PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarget 
 
 const char *CHL2MPRules::GetGameDescription( void )
 { 
+	if ( kart_enabled.GetBool() )
+		return "Kart Race";
+
 	if ( IsTeamplay() )
 		return "Team Deathmatch"; 
 
@@ -1066,23 +1096,40 @@ void CHL2MPRules::RestartGame()
 		m_flGameStartTime.GetForModify() = 0.0f;
 	}
 
-	CleanUpMap();
-	
-	// now respawn all players
-	for (int i = 1; i <= gpGlobals->maxClients; i++ )
+	if ( GetKartRaceState() != KART_RACE_STATE_NONE )
 	{
-		CHL2MP_Player *pPlayer = (CHL2MP_Player*) UTIL_PlayerByIndex( i );
+		// A new race: clean map, everyone on the grid.
+		KartNewRace( KART_RACE_STATE_WAITING );
 
-		if ( !pPlayer )
-			continue;
-
-		if ( pPlayer->GetActiveWeapon() )
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 		{
-			pPlayer->GetActiveWeapon()->Holster();
+			CHL2MP_Player *pPlayer = (CHL2MP_Player*) UTIL_PlayerByIndex( i );
+			if ( pPlayer )
+			{
+				pPlayer->Reset();
+			}
 		}
-		pPlayer->RemoveAllItems( true );
-		respawn( pPlayer, false );
-		pPlayer->Reset();
+	}
+	else
+	{
+		CleanUpMap();
+	
+		// now respawn all players
+		for (int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CHL2MP_Player *pPlayer = (CHL2MP_Player*) UTIL_PlayerByIndex( i );
+
+			if ( !pPlayer )
+				continue;
+
+			if ( pPlayer->GetActiveWeapon() )
+			{
+				pPlayer->GetActiveWeapon()->Holster();
+			}
+			pPlayer->RemoveAllItems( true );
+			respawn( pPlayer, false );
+			pPlayer->Reset();
+		}
 	}
 
 	// Respawn entities (glass, doors, etc..)
@@ -1222,7 +1269,9 @@ void CHL2MPRules::CleanUpMap()
 
 void CHL2MPRules::CheckChatForReadySignal( CHL2MP_Player *pPlayer, const char *chatmsg )
 {
-	if( m_bAwaitingReadyRestart && FStrEq( chatmsg, mp_ready_signal.GetString() ) )
+	// The ready signal also starts a kart race once every kart has sent it.
+	bool bListening = m_bAwaitingReadyRestart || GetKartRaceState() == KART_RACE_STATE_WAITING;
+	if( bListening && FStrEq( chatmsg, mp_ready_signal.GetString() ) )
 	{
 		if( !pPlayer->IsReady() )
 		{

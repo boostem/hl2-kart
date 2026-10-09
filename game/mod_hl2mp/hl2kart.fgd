@@ -15,12 +15,12 @@
 	laps(integer) : "Laps" : 3 : "Number of laps in a race (minimum 1)."
 	track_name(string) : "Track name" : "" : "Display name of the track."
 
-	output OnRaceStart(void) : "Fired when the race starts."
-	output OnRaceFinish(void) : "Fired when the race ends."
+	output OnRaceStart(void) : "Fired at GO, when the countdown of each race ends."
+	output OnRaceFinish(void) : "Fired when the first kart finishes; activator is the winner."
 ]
 
 @PointClass base(Targetname, Angles) studio("models/buggy.mdl") size(-32 -32 0, 32 32 48) color(0 200 0) = kart_start :
-	"One starting grid slot. Place 8 in a 2x4 grid, 96 units apart. Karts spawn on the lowest free grid number. The arrow shows the facing (yaw) of the kart."
+	"One starting grid slot. Place 8 in a 2x4 grid, 96 units apart. Karts spawn on the lowest free grid number; at each race start they line up by the last race's finish order. Put the grid behind the kart_finish, not inside it. The arrow shows the facing (yaw) of the kart."
 [
 	grid(integer) : "Grid slot" : 0 : "Grid position, lowest first (0 is pole). Karts take the lowest slot that is free."
 ]

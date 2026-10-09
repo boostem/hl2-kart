@@ -117,6 +117,8 @@ public:
 	float GetKartBestLap( void ) const { return m_flKartBestLap; }
 	float GetKartTotalTime( void ) const { return m_flKartTotalTime; }
 	float GetKartFinishTime( void ) const { return m_flKartFinishTime; }
+	bool IsKartLateJoin( void ) const { return m_bKartLateJoin; }
+	bool IsKartDNF( void ) const { return m_bKartDNF; }
 	void ResetKartRaceState( void );
 
 	Activity TranslateTeamActivity( Activity ActToTranslate );
@@ -182,8 +184,9 @@ private:
 	CNetworkVar( float, m_flKartReverseTime );	// seconds the brake has been held at a standstill
 	CNetworkVar( float, m_flKartBumpCooldown );	// seconds until the next bump sound may play
 
-	// Kart race state. Only CKartRaceManager changes it.
+	// Kart race state. Only the race manager and the race flow change it.
 	friend class CKartRaceManager;
+	friend class CHL2MPRules;
 	CNetworkVar( int, m_nKartLap );
 	CNetworkVar( int, m_nKartNextCheckpoint );
 	CNetworkVar( float, m_flKartProgress );
@@ -193,6 +196,9 @@ private:
 	CNetworkVar( float, m_flKartBestLap );
 	CNetworkVar( float, m_flKartTotalTime );
 	float m_flKartFinishTime;	// server time the player finished, orders the finishers
+	CNetworkVar( bool, m_bKartLateJoin );	// joined while the race ran: no position, races the next one
+	bool m_bKartInRace;		// on the track when the current race started
+	bool m_bKartDNF;		// finished for the player when kart_finish_timeout ran out
 
 	float m_flNextModelChangeTime;
 	float m_flNextTeamChangeTime;
