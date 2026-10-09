@@ -34,7 +34,6 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
-ConVar kart_min_players( "kart_min_players", "1", FCVAR_NOTIFY, "Karts needed before a race starts (unless every kart says mp_ready_signal in chat).", true, 1, true, MAX_PLAYERS );
 ConVar kart_waiting_time( "kart_waiting_time", "3", FCVAR_NOTIFY, "Seconds to wait once kart_min_players karts are in before the countdown, so karts still loading make the grid.", true, 0, false, 0 );
 ConVar kart_countdown_time( "kart_countdown_time", "3", FCVAR_NOTIFY, "Seconds the karts are held on the grid before the race starts.", true, 0, true, 10 );
 ConVar kart_finish_timeout( "kart_finish_timeout", "30", FCVAR_NOTIFY, "Seconds the other karts have to finish once the first one has; then they are finished for them.", true, 0, false, 0 );
@@ -138,11 +137,6 @@ void CHL2MPRules::KartRaceThink( void )
 					event->SetInt( "seconds", nSeconds );
 					gameeventmanager->FireEvent( event );
 				}
-
-				// Until the countdown HUD draws it.
-				char szSeconds[8];
-				Q_snprintf( szSeconds, sizeof( szSeconds ), "%d", nSeconds );
-				UTIL_ClientPrintAll( HUD_PRINTCENTER, "%s1", szSeconds );
 			}
 		}
 		break;
@@ -509,9 +503,6 @@ void CHL2MPRules::KartStartRace( void )
 		event->SetInt( "laps", pManager ? pManager->GetLaps() : 0 );
 		gameeventmanager->FireEvent( event );
 	}
-
-	// Until the countdown HUD draws it.
-	UTIL_ClientPrintAll( HUD_PRINTCENTER, "GO!" );
 }
 
 static int KartPositionSortFunc( CHL2MP_Player * const *a, CHL2MP_Player * const *b )

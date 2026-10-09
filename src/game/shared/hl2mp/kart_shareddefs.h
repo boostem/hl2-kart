@@ -28,6 +28,10 @@ extern ConVar kart_enabled;
 // take it at spawn, like kart_enabled.
 extern ConVar kart_model;
 
+// Karts needed before a race starts (kart_race_flow.cpp). Replicated for the
+// HUD's "WAITING FOR PLAYERS (n/m)".
+extern ConVar kart_min_players;
+
 // Kart movement tuning, read by CKartGameMovement on both sides. Replicated so
 // prediction matches the server; not cheats, so cfg/kart_tuning.cfg can set them.
 extern ConVar kart_max_speed;

@@ -2,9 +2,11 @@
 //
 // Purpose: Kart race HUD messages, centered: the wrong-way warning (from the
 //			local player's networked m_bKartWrongWay) and the banner that
-//			announces "LAP 2", "FINAL LAP", "FINISH" and the finishing place
-//			(kart_lap and kart_race_finish events). Both are animated by
-//			HudAnimations.txt: KartWrongWayFlash/Hide, KartBannerShow/Hold.
+//			announces the race: "WAITING FOR PLAYERS (n/m)" (the race state),
+//			the countdown "3", "2", "1", "GO!" (kart_countdown and
+//			kart_race_start), "LAP 2", "FINAL LAP", "FINISH" and the finishing
+//			place (kart_lap and kart_race_finish). Both are animated by
+//			HudAnimations.txt: KartWrongWayFlash/Hide, KartBannerShow/Hold/Count.
 //
 //=============================================================================//
 
@@ -28,6 +30,8 @@ using namespace vgui;
 #define KART_SOUND_WRONG_WAY		"Kart.WrongWay"
 #define KART_SOUND_FINAL_LAP		"Kart.FinalLap"
 #define KART_SOUND_FINISH			"Kart.Finish"
+#define KART_SOUND_COUNTDOWN_BEEP	"Kart.CountdownBeep"
+#define KART_SOUND_COUNTDOWN_GO		"Kart.CountdownGo"
 
 static void KartHud_PlayLocalSound( const char *pszSound )
 {
@@ -169,8 +173,10 @@ DECLARE_HUDELEMENT( CKartWrongWay );
 
 //-----------------------------------------------------------------------------
 // Purpose: One centered line that drops in and fades out, upper center:
-//			"LAP 3" and "FINAL LAP" when a lap is completed, "FINISH" over the
-//			line, then the place ("2ND PLACE") which stays until the next race.
+//			the countdown digits and "GO!" with a beep each, "LAP 3" and
+//			"FINAL LAP" when a lap is completed, "FINISH" over the line, then
+//			the place ("2ND PLACE") which stays until the next race. While the
+//			race waits for karts, a steady status line takes its place.
 //-----------------------------------------------------------------------------
 // How long "FINISH" shows before the place replaces it.
 #define KART_BANNER_PLACE_DELAY		2.0f
@@ -183,12 +189,15 @@ public:
 	CKartBanner( const char *pElementName ) : BaseClass( pElementName, "KartBanner" )
 	{
 		Clear();
+		m_nLastRaceState = KART_RACE_STATE_NONE;
 	}
 
 	virtual void Init( void )
 	{
 		ListenForGameEvent( KART_EVENT_LAP );
 		ListenForGameEvent( KART_EVENT_RACE_FINISH );
+		ListenForGameEvent( KART_EVENT_COUNTDOWN );
+		ListenForGameEvent( KART_EVENT_RACE_START );
 	}
 
 	virtual void Reset( void )
@@ -196,15 +205,45 @@ public:
 		Clear();
 	}
 
+	virtual void LevelInit( void )
+	{
+		Clear();
+		m_nLastRaceState = KART_RACE_STATE_NONE;
+	}
+
+	// Follows the race state here: HUD elements only think while drawn.
 	virtual bool ShouldDraw( void )
 	{
-		return m_wszText[0] && BaseClass::ShouldDraw();
+		UpdateRaceState();
+		return ( m_wszText[0] || m_wszStatus[0] ) && BaseClass::ShouldDraw();
 	}
 
 	virtual void FireGameEvent( IGameEvent *event )
 	{
 		C_HL2MP_Player *pPlayer = C_HL2MP_Player::GetLocalHL2MPPlayer();
-		if ( !pPlayer || event->GetInt( "userid" ) != pPlayer->GetUserID() )
+		if ( !pPlayer )
+			return;
+
+		// The countdown is everyone's.
+		if ( !V_strcmp( event->GetName(), KART_EVENT_COUNTDOWN ) )
+		{
+			wchar_t wszText[8];
+			V_snwprintf( wszText, ARRAYSIZE( wszText ), L"%d", event->GetInt( "seconds" ) );
+			Show( wszText, "KartBannerCount" );
+			m_bCountdown = true;
+			KartHud_PlayLocalSound( KART_SOUND_COUNTDOWN_BEEP );
+			return;
+		}
+
+		if ( !V_strcmp( event->GetName(), KART_EVENT_RACE_START ) )
+		{
+			Show( L"GO!", "KartBannerCount" );
+			m_bCountdown = true;
+			KartHud_PlayLocalSound( KART_SOUND_COUNTDOWN_GO );
+			return;
+		}
+
+		if ( event->GetInt( "userid" ) != pPlayer->GetUserID() )
 			return;
 
 		if ( !V_strcmp( event->GetName(), KART_EVENT_LAP ) )
@@ -254,17 +293,6 @@ public:
 
 	virtual void OnThink( void )
 	{
-		// A new race clears what is left of the last one.
-		C_HL2MP_Player *pPlayer = C_HL2MP_Player::GetLocalHL2MPPlayer();
-		if ( pPlayer && pPlayer->GetKartLap() == 0 && !pPlayer->IsKartFinished() )
-		{
-			if ( m_wszText[0] || m_wszNext[0] )
-			{
-				Clear();
-			}
-			return;
-		}
-
 		if ( m_wszNext[0] && gpGlobals->curtime >= m_flNextTime )
 		{
 			Show( m_wszNext, "KartBannerHold" );
@@ -277,16 +305,33 @@ public:
 		BaseClass::ApplySchemeSettings( pScheme );
 
 		m_hFont = GetKartFont( pScheme, "KartHudMedium" );
+		m_hDigitFont = GetKartFont( pScheme, "KartHudLarge" );
+		m_hStatusFont = GetKartFont( pScheme, "KartHudSmall" );
 		m_Color = GetKartColor( pScheme, "KartAmber" );
+		m_StatusColor = GetKartColor( pScheme, "KartWhite" );
 	}
 
 	virtual void Paint( void )
 	{
+		// The status line until a banner takes its place.
+		if ( m_wszStatus[0] && ( !m_wszText[0] || m_flAlpha <= 0.0f ) )
+		{
+			int y = ( GetTall() - surface()->GetFontTall( m_hStatusFont ) ) / 2;
+			KartHud_DrawCenteredText( m_hStatusFont, m_StatusColor, GetWide(), y, m_wszStatus );
+			return;
+		}
+
+		if ( !m_wszText[0] )
+			return;
+
 		Color col = m_Color;
 		col[3] *= clamp( m_flAlpha, 0.0f, 1.0f );
 
-		int y = ( GetTall() - surface()->GetFontTall( m_hFont ) ) / 2 + scheme()->GetProportionalScaledValueEx( GetScheme(), (int)m_flOffset );
-		KartHud_DrawCenteredText( m_hFont, col, GetWide(), y, m_wszText );
+		// The HL2 numerals for the countdown digits.
+		HFont hFont = ( m_wszText[0] >= L'0' && m_wszText[0] <= L'9' ) ? m_hDigitFont : m_hFont;
+
+		int y = ( GetTall() - surface()->GetFontTall( hFont ) ) / 2 + scheme()->GetProportionalScaledValueEx( GetScheme(), (int)m_flOffset );
+		KartHud_DrawCenteredText( hFont, col, GetWide(), y, m_wszText );
 	}
 
 private:
@@ -295,6 +340,7 @@ private:
 	{
 		V_wcsncpy( m_wszText, pszText, sizeof( m_wszText ) );
 		m_wszNext[0] = 0;
+		m_bCountdown = false;
 
 		AnimationController *pAnim = g_pClientMode->GetViewportAnimationController();
 		pAnim->StopAnimationSequence( g_pClientMode->GetViewport(), "KartBannerShow" );
@@ -306,7 +352,41 @@ private:
 	{
 		m_wszText[0] = 0;
 		m_wszNext[0] = 0;
+		m_wszStatus[0] = 0;
 		m_flNextTime = 0.0f;
+		m_bCountdown = false;
+	}
+
+	// A new race clears what is left of the last one, and while the race
+	// waits for karts the status line says what for.
+	void UpdateRaceState( void )
+	{
+		int nState = HL2MPRules() ? HL2MPRules()->GetKartRaceState() : KART_RACE_STATE_NONE;
+		if ( nState != m_nLastRaceState )
+		{
+			m_nLastRaceState = nState;
+
+			// The countdown's first digit can arrive before the state does.
+			if ( nState == KART_RACE_STATE_NONE || nState == KART_RACE_STATE_WAITING ||
+				 ( nState == KART_RACE_STATE_COUNTDOWN && !m_bCountdown ) )
+			{
+				Clear();
+			}
+		}
+
+		m_wszStatus[0] = 0;
+		if ( nState != KART_RACE_STATE_WAITING )
+			return;
+
+		if ( HL2MPRules()->GetKartStateEndTime() == 0.0f )
+		{
+			V_snwprintf( m_wszStatus, ARRAYSIZE( m_wszStatus ), L"WAITING FOR PLAYERS (%d/%d)",
+				HL2MPRules()->GetKartRacers(), kart_min_players.GetInt() );
+		}
+		else
+		{
+			V_wcsncpy( m_wszStatus, L"GET READY", sizeof( m_wszStatus ) );
+		}
 	}
 
 	// Animated by KartBannerShow and KartBannerHold.
@@ -316,10 +396,16 @@ private:
 
 	wchar_t	m_wszText[32];
 	wchar_t	m_wszNext[32];	// shown at m_flNextTime: the place after "FINISH"
+	wchar_t	m_wszStatus[48];	// steady, while no banner shows: "WAITING FOR PLAYERS (1/2)"
 	float	m_flNextTime;
+	bool	m_bCountdown;		// m_wszText is a countdown digit or "GO!"
+	int		m_nLastRaceState;
 
 	HFont	m_hFont;
+	HFont	m_hDigitFont;
+	HFont	m_hStatusFont;
 	Color	m_Color;
+	Color	m_StatusColor;
 };
 
 DECLARE_HUDELEMENT( CKartBanner );

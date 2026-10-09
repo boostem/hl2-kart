@@ -15,6 +15,9 @@
 //			than the networked race state, which goes stale for karts outside
 //			the PVS. The networked state only orders the karts still racing.
 //
+//			A status line under the title follows the race state: "RACE IN
+//			PROGRESS", the time left to finish, the time to the next race.
+//
 //=============================================================================//
 
 #include "cbase.h"
@@ -106,11 +109,13 @@ private:
 	void		ClearRace( void );
 	void		RebuildList( void );
 	void		AddSections( void );
+	void		UpdateStatus( void );
 
 	static int	FinishedSortFunc( Racer_t * const *a, Racer_t * const *b );
 	static int	RacingSortFunc( C_HL2MP_Player * const *a, C_HL2MP_Player * const *b );
 
 	SectionedListPanel		*m_pList;
+	Label					*m_pStatus;
 	CUtlVector< Racer_t >	m_Racers;
 
 	bool		m_bOpen;
@@ -136,6 +141,8 @@ CKartResults::CKartResults( const char *pElementName ) :
 	m_pList = new SectionedListPanel( this, "ResultsList" );
 	m_pList->SetMouseInputEnabled( false );
 	m_pList->SetVerticalScrollbar( false );
+
+	m_pStatus = new Label( this, "StatusLabel", "" );
 
 	m_bOpen = false;
 	m_nLastRaceState = KART_RACE_STATE_NONE;
@@ -251,6 +258,44 @@ void CKartResults::OnThink( void )
 	{
 		RebuildList();
 	}
+
+	UpdateStatus();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The status line, from the networked race state.
+//-----------------------------------------------------------------------------
+void CKartResults::UpdateStatus( void )
+{
+	if ( !m_pStatus || !HL2MPRules() )
+		return;
+
+	int nSeconds = (int)ceil( MAX( HL2MPRules()->GetKartStateEndTime() - gpGlobals->curtime, 0.0f ) );
+
+	char szStatus[64];
+	switch ( HL2MPRules()->GetKartRaceState() )
+	{
+	case KART_RACE_STATE_WAITING:
+		V_snprintf( szStatus, sizeof( szStatus ), "WAITING FOR PLAYERS (%d/%d)", HL2MPRules()->GetKartRacers(), kart_min_players.GetInt() );
+		break;
+	case KART_RACE_STATE_COUNTDOWN:
+		V_strncpy( szStatus, "STARTING", sizeof( szStatus ) );
+		break;
+	case KART_RACE_STATE_RACING:
+		V_strncpy( szStatus, "RACE IN PROGRESS", sizeof( szStatus ) );
+		break;
+	case KART_RACE_STATE_FINISHING:
+		V_snprintf( szStatus, sizeof( szStatus ), "FINISHING: %d S LEFT", nSeconds );
+		break;
+	case KART_RACE_STATE_RESULTS:
+		V_snprintf( szStatus, sizeof( szStatus ), "RACE OVER: NEXT IN %d", nSeconds );
+		break;
+	default:
+		szStatus[0] = 0;
+		break;
+	}
+
+	m_pStatus->SetText( szStatus );
 }
 
 void CKartResults::FireGameEvent( IGameEvent *event )
