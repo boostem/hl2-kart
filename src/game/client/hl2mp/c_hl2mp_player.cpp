@@ -503,6 +503,31 @@ void C_HL2MP_Player::DrawKartDebugOverlay( void )
 	DebugRow( "throttle", "%d (W=+1, S=-1)", nThrottle );
 	DebugRow( "steer", "%d (D=+1, A=-1)", nSteer );
 	DebugRow( "pred errors", "set cl_showerror 1 to log them" );
+
+	// Race state
+	CHL2MPRules *pRules = HL2MPRules();
+	int nLaps = pRules ? pRules->GetKartLaps() : 0;
+	int nRacers = pRules ? pRules->GetKartRacers() : 0;
+	float flLapTime = ( m_nKartLap > 0 && !m_bKartFinished ) ? MAX( 0.0f, gpGlobals->curtime - m_flKartLapStartTime ) : 0.0f;
+	DebugRow( "lap", "%d / %d", m_nKartLap, nLaps );
+	DebugRow( "next cp", "%d", m_nKartNextCheckpoint );
+	DebugRow( "progress", "%.3f", m_flKartProgress );
+	DebugRow( "position", "%d / %d", m_nKartRacePosition, nRacers );
+	DebugRow( "wrong way", "%s", m_bKartWrongWay ? "WRONG WAY" : "no" );
+	DebugRow( "lap time", "%.2f", flLapTime );
+	DebugRow( "best lap", "%.2f", m_flKartBestLap );
+	DebugRow( "finished", "%s", m_bKartFinished ? "yes" : "no" );
+
+	// Every kart player, for checking a second client or bots
+	DebugRow( "players", "pos lap progress" );
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		C_HL2MP_Player *pKart = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( !pKart || !pKart->IsInKart() )
+			continue;
+		DebugRow( pKart->GetPlayerName(), "%d  lap %d  %.3f%s", pKart->GetKartRacePosition(), pKart->GetKartLap(),
+			pKart->GetKartProgress(), pKart->IsKartFinished() ? "  finished" : "" );
+	}
 }
 
 // Top speed the engine pitch is mapped to: the replicated movement convar
