@@ -110,6 +110,19 @@ public:
 	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
 	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
 	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
+
+	// Kart race state (see kart_race_shared.h). The race manager drives it.
+	int GetKartLap( void ) const { return m_nKartLap; }
+	int GetKartNextCheckpoint( void ) const { return m_nKartNextCheckpoint; }
+	float GetKartProgress( void ) const { return m_flKartProgress; }
+	int GetKartRacePosition( void ) const { return m_nKartRacePosition; }
+	bool IsKartFinished( void ) const { return m_bKartFinished; }
+	float GetKartLapStartTime( void ) const { return m_flKartLapStartTime; }
+	float GetKartBestLap( void ) const { return m_flKartBestLap; }
+	float GetKartTotalTime( void ) const { return m_flKartTotalTime; }
+	float GetKartFinishTime( void ) const { return m_flKartFinishTime; }
+	void ResetKartRaceState( void );
+
 	Activity TranslateTeamActivity( Activity ActToTranslate );
 	
 	float GetNextModelChangeTime( void ) { return m_flNextModelChangeTime; }
@@ -176,6 +189,18 @@ private:
 	CNetworkVar( float, m_flKartSlipAngle );	// heading minus velocity yaw, degrees
 	CNetworkVar( float, m_flKartDriftTime );	// seconds into the current drift
 	CNetworkVar( float, m_flKartHopTime );		// seconds airborne since a hop, 0 when not hopping
+
+	// Kart race state. Only CKartRaceManager changes it.
+	friend class CKartRaceManager;
+	CNetworkVar( int, m_nKartLap );
+	CNetworkVar( int, m_nKartNextCheckpoint );
+	CNetworkVar( float, m_flKartProgress );
+	CNetworkVar( int, m_nKartRacePosition );
+	CNetworkVar( bool, m_bKartFinished );
+	CNetworkVar( float, m_flKartLapStartTime );
+	CNetworkVar( float, m_flKartBestLap );
+	CNetworkVar( float, m_flKartTotalTime );
+	float m_flKartFinishTime;	// server time the player finished, orders the finishers
 
 	float m_flNextModelChangeTime;
 	float m_flNextTeamChangeTime;

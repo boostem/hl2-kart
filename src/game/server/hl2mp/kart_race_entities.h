@@ -20,11 +20,9 @@
 #endif
 
 #include "triggers.h"
+#include "kart_race_shared.h"
 
 class CHL2MP_Player;
-
-// Index of the start/finish line in the checkpoint order.
-#define KART_FINISH_INDEX	0
 
 //-----------------------------------------------------------------------------
 // kart_checkpoint: brush trigger the karts pass in track order. Only kart
@@ -76,7 +74,13 @@ private:
 };
 
 //-----------------------------------------------------------------------------
-// kart_race_manager: one per map.
+// kart_race_manager: one per map. Counts laps from the checkpoint touches,
+// tracks every kart's progress along the track and ranks the karts each tick.
+//
+// Checkpoints are hit in index order: hitting index k when it is the player's
+// next checkpoint advances to the following one. The first line crossing
+// starts lap 1; crossing it again once every checkpoint was hit completes the
+// lap, and completing lap "laps" finishes the race.
 //-----------------------------------------------------------------------------
 class CKartRaceManager : public CLogicalEntity
 {
@@ -88,9 +92,11 @@ public:
 	~CKartRaceManager();
 
 	virtual void Spawn( void );
+	virtual void Precache( void );
 	virtual void Activate( void );
 
-	// Rebuilds the checkpoint list from the map, sorted by index.
+	// Rebuilds the checkpoint list from the map, sorted by index, and the route
+	// the progress is measured along.
 	void CollectCheckpoints( void );
 
 	int GetLaps( void ) const { return m_iLaps; }
@@ -98,17 +104,55 @@ public:
 	int GetCheckpointCount( void ) const { return m_Checkpoints.Count(); }
 	CKartCheckpoint *GetCheckpoint( int i ) const;
 
+	// True when laps can be counted: a kart_finish and at least one checkpoint.
+	bool HasRoute( void ) const { return m_Route.Count() >= 2; }
+	int GetRouteCount( void ) const { return m_Route.Count(); }
+	const Vector &GetRouteCenter( int i ) const { return m_Route[i].center; }
+
 	// A kart player entered checkpoint 'index' (KART_FINISH_INDEX for the line).
 	void OnKartTouchedCheckpoint( CHL2MP_Player *pPlayer, int index );
 
-	// Fired by the race flow (later tickets).
+	// Puts every player back to the start of the race (kart_race_reset).
+	void ResetRace( void );
+
+	// Every tick: each kart's progress, then the race positions.
+	void RaceThink( void );
+
+	// OnRaceStart is fired by the race flow (later tickets); OnRaceFinish when
+	// the first kart finishes.
 	COutputEvent m_OnRaceStart;
 	COutputEvent m_OnRaceFinish;
 
 private:
+	// A kart player taking part in the race: in a kart and on a team.
+	static bool IsRacing( CHL2MP_Player *pPlayer );
+
+	// Route position of checkpoint 'index', or -1 when it isn't on the route.
+	int RoutePosition( int index ) const;
+	// Index of the checkpoint after 'index' on the route, wrapping to the line.
+	int NextRouteIndex( int index ) const;
+
+	void UpdateProgress( CHL2MP_Player *pPlayer );
+	void UpdatePositions( void );
+	void FinishRace( CHL2MP_Player *pPlayer );
+
 	int m_iLaps;
 	string_t m_iszTrackName;
 	CUtlVector< CHandle< CKartCheckpoint > > m_Checkpoints;
+
+	// The track as a loop of checkpoint centers: route position 0 is the line,
+	// then one entry per checkpoint index in order. Segment p runs from point p
+	// to point p + 1 (the last one back to the line).
+	struct RoutePoint_t
+	{
+		int		index;		// checkpoint index
+		Vector	center;		// world space center of its trigger
+		Vector	dir;		// unit direction of the segment starting here
+		float	length;		// length of the segment starting here
+	};
+	CUtlVector< RoutePoint_t > m_Route;
+
+	bool m_bSomeoneFinished;	// OnRaceFinish has fired
 };
 
 // The map's race manager, or NULL on a map without one (free drive).

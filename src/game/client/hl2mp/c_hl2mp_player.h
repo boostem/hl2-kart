@@ -129,6 +129,16 @@ public:
 	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
 	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
 
+	// Kart race state (see kart_race_shared.h), networked for every player.
+	int GetKartLap( void ) const { return m_nKartLap; }
+	int GetKartNextCheckpoint( void ) const { return m_nKartNextCheckpoint; }
+	float GetKartProgress( void ) const { return m_flKartProgress; }
+	int GetKartRacePosition( void ) const { return m_nKartRacePosition; }
+	bool IsKartFinished( void ) const { return m_bKartFinished; }
+	float GetKartLapStartTime( void ) const { return m_flKartLapStartTime; }
+	float GetKartBestLap( void ) const { return m_flKartBestLap; }
+	float GetKartTotalTime( void ) const { return m_flKartTotalTime; }
+
 	// In kart mode: locks the view to the kart heading and strips non-kart input.
 	virtual bool CreateMove( float flInputSampleTime, CUserCmd *pCmd ) OVERRIDE;
 
@@ -192,6 +202,16 @@ private:
 	float	m_flKartDriftTime;	// seconds into the current drift
 	float	m_flKartHopTime;	// seconds airborne since a hop, 0 when not hopping
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
+
+	// Kart race state, from the server's race manager.
+	int		m_nKartLap;
+	int		m_nKartNextCheckpoint;
+	float	m_flKartProgress;
+	int		m_nKartRacePosition;
+	bool	m_bKartFinished;
+	float	m_flKartLapStartTime;
+	float	m_flKartBestLap;
+	float	m_flKartTotalTime;
 
 	CSoundPatch	*m_pKartEngineIdle;
 	CSoundPatch	*m_pKartEngineRev;

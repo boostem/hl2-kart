@@ -13,6 +13,7 @@
 #include "iclientmode.h"
 #include "vgui/ILocalize.h"
 #include "hl2mp_gamerules.h"
+#include "kart_hud_base.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -33,6 +34,7 @@ class CTargetID : public CHudElement, public vgui::Panel
 public:
 	CTargetID( const char *pElementName );
 	void Init( void );
+	virtual bool	ShouldDraw( void );
 	virtual void	ApplySchemeSettings( vgui::IScheme *scheme );
 	virtual void	Paint( void );
 	void VidInit( void );
@@ -73,6 +75,17 @@ void CTargetID::Init( void )
 {
 	SetSize( ScreenWidth(), ScreenHeight() );
 };
+
+//-----------------------------------------------------------------------------
+// Purpose: No names over karts: the race HUD shows who is where.
+//-----------------------------------------------------------------------------
+bool CTargetID::ShouldDraw( void )
+{
+	if ( KartHud_LocalPlayerInKart() )
+		return false;
+
+	return CHudElement::ShouldDraw();
+}
 
 void CTargetID::ApplySchemeSettings( vgui::IScheme *scheme )
 {

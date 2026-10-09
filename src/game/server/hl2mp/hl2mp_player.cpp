@@ -16,6 +16,7 @@
 #include "hl2mp_gamerules.h"
 #include "kart_shareddefs.h"
 #include "kart_race_entities.h"
+#include "kart_race_shared.h"
 #include "KeyValues.h"
 #include "team.h"
 #include "weapon_hl2mpbase.h"
@@ -107,6 +108,16 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropInt( SENDINFO( m_iPlayerSoundType), 3 ),
 	SendPropBool( SENDINFO( m_bKartMode ) ),
 	SendPropInt( SENDINFO( m_nKartDriftDir ), 2 ),	// signed: -1, 0, 1. Everyone gets it, for drift effects on other karts.
+
+	// kart race state, for everyone's HUD and the bots
+	SendPropInt( SENDINFO( m_nKartLap ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
+	SendPropInt( SENDINFO( m_nKartNextCheckpoint ), KART_NET_CHECKPOINT_BITS, SPROP_UNSIGNED ),
+	SendPropFloat( SENDINFO( m_flKartProgress ), KART_NET_PROGRESS_BITS, SPROP_CHANGES_OFTEN, 0.0f, KART_NET_PROGRESS_MAX ),
+	SendPropInt( SENDINFO( m_nKartRacePosition ), KART_NET_POSITION_BITS, SPROP_UNSIGNED ),
+	SendPropBool( SENDINFO( m_bKartFinished ) ),
+	SendPropTime( SENDINFO( m_flKartLapStartTime ) ),
+	SendPropFloat( SENDINFO( m_flKartBestLap ), -1, SPROP_NOSCALE ),
+	SendPropFloat( SENDINFO( m_flKartTotalTime ), -1, SPROP_NOSCALE ),
 	
 	SendPropExclude( "DT_BaseAnimating", "m_flPoseParameter" ),
 	SendPropExclude( "DT_BaseFlex", "m_viewtarget" ),
@@ -177,6 +188,8 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartSlipAngle = 0.0f;
 	m_flKartDriftTime = 0.0f;
 	m_flKartHopTime = 0.0f;
+
+	ResetKartRaceState();
 
     m_bEnterObserver = false;
 	m_bReady = false;
@@ -685,6 +698,23 @@ void CHL2MP_Player::ApplyKartColor( void )
 	iColor = abs( iColor ) % KART_COLOR_COUNT;
 	const color32 &c = g_KartColors[iColor];
 	SetRenderColor( c.r, c.g, c.b );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Back to the start of the race: lap 0, waiting for the line. Kept
+//			across respawns; the race manager and kart_race_reset call this.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::ResetKartRaceState( void )
+{
+	m_nKartLap = 0;
+	m_nKartNextCheckpoint = KART_FINISH_INDEX;
+	m_flKartProgress = 0.0f;
+	m_nKartRacePosition = 0;
+	m_bKartFinished = false;
+	m_flKartLapStartTime = 0.0f;
+	m_flKartBestLap = 0.0f;
+	m_flKartTotalTime = 0.0f;
+	m_flKartFinishTime = 0.0f;
 }
 
 void CHL2MP_Player::ResetAnimation( void )
