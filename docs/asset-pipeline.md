@@ -99,3 +99,73 @@ In game: `sv_cheats 1; prop_physics_create test/test_cube.mdl`.
 - The 64-bit builds in `bin/x64/` aren't used; the 32-bit tools in `bin/` work in the 64-bit (WoW64) prefix.
 - Wine itself can print `MESA-EGL: warning: ...` lines when `DISPLAY` is set; they are harmless and don't show in
   a clean shell.
+
+## Compiling maps on Linux
+
+The map compilers run under wine the same way, with the same settings (`tools/wine/env.sh`) and tools game dir:
+
+```sh
+tools/wine/compile_map.sh assets_src/maps/kart_arena.vmf           # fast: vvis -fast, vrad -fast
+tools/wine/compile_map.sh assets_src/maps/kart_arena.vmf --final   # full vvis, vrad -both -final (HDR too)
+```
+
+- `compile_map.sh <map.vmf> [--final]` copies the VMF to a build dir outside the repo (`$KART_MAP_BUILD`, default
+  `~/.cache/hl2kart-maps/<map>/`, where the `.prt`, `.lin`, `.log` and each tool's output `vbsp.out`, `vvis.out`,
+  `vrad.out` stay), runs vbsp, vvis and vrad, and copies the `.bsp` to `game/mod_hl2mp/maps/`.
+- It stops with an error when vbsp reports a leak (the pointfile is the `.lin` in the build dir) or any tool fails.
+  vbsp still prints `Could not locate 'GameData' key` (that is Hammer's FGD setting) and vrad
+  `Couldn't open texlight file ... lights.rad` (no texture lights); both are harmless.
+- The fast compile has LDR lighting only, which the game falls back to with HDR on. Use `--final` before a release.
+  The kart arena takes seconds either way.
+- The single tools take their options before the map, e.g. `tools/wine/vvis.sh -fast <map>.bsp` or
+  `tools/wine/vrad.sh -both -final <map>.bsp`; each adds `-game <tools gamedir>` and writes next to the map.
+- Commit a compiled `.bsp` only if it is under 10 MB.
+
+### Kart test arena (`kart_arena`)
+
+`assets_src/maps/kart_arena.vmf` is plain text, written by `assets_src/maps/kart_arena.py` (standard library only:
+`python3 assets_src/maps/kart_arena.py`) so the banked curve's and ramps' planes needn't be typed by hand. Edit the
+layout in the script, regenerate the VMF, compile, and commit all three. The VMF opens in Hammer too.
+
+- A 6144 x 6144 x 1024 box sealed by `tools/toolsskybox` brushes, skybox `sky_day01_01`, one `light_environment`.
+  Floor `concrete/concretefloor011a`, 128-high perimeter walls `concrete/concretewall004a`.
+- A 3584 x 3584 central island, 128 high, makes a 1216-wide lane round it, driven counter-clockwise seen from above.
+- **Start**: 8 `info_player_deathmatch` in a row across the west end of the south lane, facing east.
+- **South straight**: about 4200 units from the start row to the curve, with traffic cones (physics props) down
+  its middle and a cone at each end of the start row.
+- **Banked curve** (south-east corner): a quarter circle round the island's corner. The outer 416 units are banked,
+  rising to 128 at the outer wall (~17 degrees); the inner 800 are flat. It is made of 12 segments, with 640-unit
+  tapered pieces at each end so the bank grows from and back to flat floor.
+- **Gentle ramp** (east lane, driven north): up 96 over 544 units (~10 degrees), a 384-unit plateau, down again.
+- **Jump** (north lane, driven west): a kicker rising 112 over 240 (~25 degrees) that ends in a drop, a 592-unit
+  gap, then a landing ramp from 64 down to the floor over 768 units, with concrete barriers along both sides.
+- Concrete barriers at the island's other three corners, `lamppost03a_off` lampposts in the arena's corners and
+  the middle of each island side, and two `env_cubemap` (start straight, jump). Run `buildcubemaps` in game for
+  proper reflections.
+
+```
+   N                         north lane, driven west  <--
+   +-------------------------------------------------------------+
+   | L                                                         L |
+   |            ===barriers===                                   |
+   |            [ landing   ]  gap   [K]   <-- jump (kicker K)    |
+   |            ===barriers===          (env_cubemap)            |
+   |        B                    L                    B          |
+   |          +---------------------------------------+          |
+   |          |                                       |          |
+ w |          |                                       |   [up  ] | e
+ e |          |                                       |   [ 10 ] | a
+ s |        L |            central island             | L [deg ] | s
+ t |          |              128 high                 |   [ramp] | t
+   |          |                                       |          |
+ | |          |                                       |       ^  |
+ v |          |                                       |    ,/  | |
+   |        B +---------------------------------------+  ,/bank| |
+   | c S                         L                     ,/curve | |
+   |   S                                             ,/ 17 deg   |
+   |   S  >  c   c   c   c   c   c    (straight)  ,/ (banked)    |
+   |   S                                       __/               |
+   | L c                                ______/                L |
+   +-------------------------------------------------------------+
+   S spawns (8, facing east)   c cones   B barriers   L lampposts
+```
