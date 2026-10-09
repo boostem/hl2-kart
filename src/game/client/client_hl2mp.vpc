@@ -189,6 +189,7 @@ $Project "Client (HL2MP)"
 				$File	"hl2mp\kart_hud_race.cpp"
 				$File	"hl2mp\kart_hud_results.cpp"
 				$File	"hl2mp\kart_hud_speedo.cpp"
+				$File	"hl2mp\kart_music.cpp"
 			}
 		}
 	}

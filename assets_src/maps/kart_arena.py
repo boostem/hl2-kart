@@ -220,7 +220,8 @@ def build():
 
     # Race: 3 laps counter-clockwise. The start/finish line crosses the south lane at FINISH_X, and 5 checkpoints
     # follow round the loop, each full lane width (outer wall to island) and TRIGGER_H tall.
-    m.entity("kart_race_manager", (FINISH_X, -LANE_MID, 64), targetname="race", laps="3", track_name="Kart Arena")
+    m.entity("kart_race_manager", (FINISH_X, -LANE_MID, 64), targetname="race", laps="3", track_name="Kart Arena",
+             music="music/hl2_song20_submix0.mp3")
     m.trigger("kart_finish", FINISH_X - 16, -INNER, FINISH_X + 16, -ISLAND, targetname="finish")
     checkpoints = [
         ("x", 0),            # 1: middle of the south straight
