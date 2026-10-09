@@ -146,11 +146,19 @@ void CKartGameMovement::KartPlayerMove( void )
 //			State: m_flKartSpeed, m_flKartYaw, m_flKartReverseTime,
 //			m_flKartBumpCooldown and the hop and drift state (m_nKartDriftDir,
 //			m_flKartSlipAngle, m_flKartDriftTime, m_flKartHopTime), the
-//			mini-turbo charge (m_flKartDriftCharge, m_nKartDriftTier) and the boost
-//			(m_flKartBoostEndTime, m_flKartBoostScale) on the player, all predicted.
+//			mini-turbo charge (m_flKartDriftCharge, m_nKartDriftTier), the boost
+//			(m_flKartBoostEndTime, m_flKartBoostScale) and the hit reaction
+//			(m_nKartHitState, m_flKartHitEndTime) on the player, all predicted.
 //			Tuning: replicated convars, the same value on both sides.
 //			Time: gpGlobals->frametime, which is TICK_INTERVAL on both sides, and
-//			gpGlobals->curtime (the boost's end), the predicted tick's time.
+//			gpGlobals->curtime (the boost's and the hit's end), the predicted tick's time.
+//
+//			Hits: only the server starts one (CHL2MP_Player::KartApplyHit); this
+//			plays it out and ends it. A spin-out takes every input away and skids
+//			to a stop at kart_spinout_decel (the spin itself is drawn only, see
+//			GetKartHitSpinYaw). A stun keeps throttle and steering but no hop or
+//			drift, under kart_stun_speed_scale of top speed. Neither lets a drift
+//			give a mini-turbo or a boost run.
 //-----------------------------------------------------------------------------
 void CKartGameMovement::KartMove( void )
 {
@@ -162,21 +170,36 @@ void CKartGameMovement::KartMove( void )
 
 	pKart->m_flKartBumpCooldown = MAX( 0.0f, pKart->m_flKartBumpCooldown - flFrametime );
 
-	// Inputs. A frozen kart gets none and coasts to a stop.
+	// A hit plays out until its end time, then control comes back.
+	int nHit = pKart->m_nKartHitState;
+	if ( nHit != KART_HIT_NONE && gpGlobals->curtime >= pKart->m_flKartHitEndTime )
+	{
+		nHit = KART_HIT_NONE;
+		pKart->m_nKartHitState = nHit;
+	}
+
+	const bool bFrozen = ( player->GetFlags() & FL_FROZEN ) != 0;
+
+	// Inputs. A frozen kart gets none and coasts to a stop, a spinning-out one
+	// gets none and skids to a stop, a stunned one can't hop or drift.
 	float flThrottle = 0.0f;
 	float flSteer = 0.0f;
 	bool bJumpHeld = false;
 	bool bJumpPressed = false;
-	if ( !( player->GetFlags() & FL_FROZEN ) )
+	if ( !bFrozen && nHit != KART_HIT_SPINOUT )
 	{
 		flThrottle = KartInputSign( mv->m_flForwardMove );
 		flSteer = KartInputSign( mv->m_flSideMove );
-		bJumpHeld = ( mv->m_nButtons & IN_JUMP ) != 0;
-		bJumpPressed = bJumpHeld && !( mv->m_nOldButtons & IN_JUMP );
+		if ( nHit == KART_HIT_NONE )
+		{
+			bJumpHeld = ( mv->m_nButtons & IN_JUMP ) != 0;
+			bJumpPressed = bJumpHeld && !( mv->m_nOldButtons & IN_JUMP );
+		}
 	}
-	else
+
+	if ( bFrozen || nHit != KART_HIT_NONE )
 	{
-		// Frozen mid-drift (round end, finish): the drift ends without a
+		// Frozen mid-drift (round end, finish) or hit: the drift ends without a
 		// mini-turbo, and any boost stops so the kart really coasts.
 		pKart->m_flKartDriftCharge = 0.0f;
 		pKart->m_nKartDriftTier = 0;
@@ -185,7 +208,22 @@ void CKartGameMovement::KartMove( void )
 
 	pKart->m_nKartSteer = (int)flSteer;	// only drawn: the wheels and steering wheel turn with it
 
-	float flSpeed = KartUpdateSpeed( pKart->m_flKartSpeed, flThrottle, flFrametime );
+	float flSpeed;
+	if ( nHit == KART_HIT_SPINOUT )
+	{
+		// Skids to a stop from whatever speed the hit left, either way.
+		pKart->m_flKartReverseTime = 0.0f;
+		flSpeed = Approach( 0.0f, pKart->m_flKartSpeed, kart_spinout_decel.GetFloat() * flFrametime );
+	}
+	else
+	{
+		flSpeed = KartUpdateSpeed( pKart->m_flKartSpeed, flThrottle, flFrametime );
+
+		if ( nHit == KART_HIT_STUN )
+		{
+			flSpeed = MIN( flSpeed, kart_max_speed.GetFloat() * kart_stun_speed_scale.GetFloat() );
+		}
+	}
 
 	KartUpdateHopAndDrift( flSpeed, flSteer, bJumpHeld, bJumpPressed, bOnGround, flFrametime );
 

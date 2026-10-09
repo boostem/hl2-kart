@@ -63,6 +63,30 @@ extern ConVar kart_turbo_tier2_duration;
 extern ConVar kart_turbo_tier3_duration;
 extern ConVar kart_boost_scale;
 extern ConVar kart_boost_decay;
+extern ConVar kart_spinout_time;
+extern ConVar kart_spinout_turns;
+extern ConVar kart_spinout_speed_scale;
+extern ConVar kart_spinout_decel;
+extern ConVar kart_stun_time;
+extern ConVar kart_stun_speed_scale;
+extern ConVar kart_hit_immunity;
+
+// What an item does to the kart it hits (CHL2MP_Player::KartApplyHit). The
+// kart movement plays the state out until m_flKartHitEndTime.
+enum KartHitType
+{
+	KART_HIT_NONE = 0,
+	KART_HIT_SPINOUT,	// spins kart_spinout_turns times and skids to a stop, no inputs
+	KART_HIT_STUN,		// shorter: no spin, no hop or drift, speed capped
+
+	KART_HIT_COUNT
+};
+
+#define KART_NET_HIT_BITS	2	// m_nKartHitState, 0 to KART_HIT_COUNT - 1
+
+#define KART_EVENT_HIT			"kart_hit"			// userid, attacker, type
+#define KART_SOUND_HIT_SPINOUT	"Kart.HitSpinout"	// a spin-out, on top of the impact
+#define KART_SOUND_HIT_IMPACT	"Kart.HitImpact"	// any hit
 
 // Below this speed (units per second, either way) the kart counts as stopped:
 // holding the brake there starts the reverse delay.

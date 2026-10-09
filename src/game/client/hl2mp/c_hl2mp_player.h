@@ -12,6 +12,7 @@
 class C_HL2MP_Player;
 #include "c_basehlplayer.h"
 #include "hl2mp_player_shared.h"
+#include "kart_shareddefs.h"
 #include "beamdraw.h"
 
 class CSoundPatch;
@@ -142,6 +143,15 @@ public:
 	float GetKartBoostScale( void ) const { return m_flKartBoostScale; }
 	void KartGiveBoost( float flDuration, float flSpeedScale );
 
+	// Kart hit reactions (spin-out, stun). Shared, see hl2mp_player_shared.cpp;
+	// the server starts them (CHL2MP_Player::KartApplyHit).
+	int GetKartHitState( void ) const { return m_nKartHitState; }
+	float GetKartHitEndTime( void ) const { return m_flKartHitEndTime; }
+	bool IsKartHit( void ) const { return m_nKartHitState != KART_HIT_NONE; }
+	bool IsKartSpinningOut( void ) const { return m_nKartHitState == KART_HIT_SPINOUT; }
+	bool IsKartHitImmune( void ) const;
+	float GetKartHitSpinYaw( void ) const;
+
 	// Kart race state (see kart_race_shared.h), networked for every player.
 	int GetKartLap( void ) const { return m_nKartLap; }
 	int GetKartNextCheckpoint( void ) const { return m_nKartNextCheckpoint; }
@@ -244,6 +254,8 @@ private:
 	int		m_nKartDriftTier;	// mini-turbo tier the charge has reached, 0-3
 	float	m_flKartBoostEndTime;	// time the current boost ends, in the past when not boosting
 	float	m_flKartBoostScale;	// kart_max_speed multiplier of the current boost
+	int		m_nKartHitState;	// KartHitType being played out, KART_HIT_NONE when none
+	float	m_flKartHitEndTime;	// time the hit ends (and kart_hit_immunity starts counting)
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
 
 	// Kart race state, from the server's race manager.

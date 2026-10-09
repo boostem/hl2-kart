@@ -17,6 +17,7 @@ class CHL2MP_Player;
 #include "simtimer.h"
 #include "soundenvelope.h"
 #include "hl2mp_player_shared.h"
+#include "kart_shareddefs.h"
 #include "hl2mp_gamerules.h"
 #include "utldict.h"
 
@@ -121,6 +122,18 @@ public:
 	float GetKartBoostEndTime( void ) const { return m_flKartBoostEndTime; }
 	float GetKartBoostScale( void ) const { return m_flKartBoostScale; }
 	void KartGiveBoost( float flDuration, float flSpeedScale );
+
+	// Kart hit reactions (spin-out, stun). The state is predicted: the kart
+	// movement plays it out and ends it. Entry is server-only, see KartApplyHit.
+	int GetKartHitState( void ) const { return m_nKartHitState; }
+	float GetKartHitEndTime( void ) const { return m_flKartHitEndTime; }
+	bool IsKartHit( void ) const { return m_nKartHitState != KART_HIT_NONE; }
+	bool IsKartSpinningOut( void ) const { return m_nKartHitState == KART_HIT_SPINOUT; }
+	bool IsKartHitImmune( void ) const;
+	float GetKartHitSpinYaw( void ) const;
+	// Spins out or stuns the kart (pAttacker: who threw the item, may be NULL).
+	// False when it can't be hit: immune, not a live kart, or frozen.
+	bool KartApplyHit( KartHitType type, CBaseEntity *pAttacker );
 
 	// Stops the kart and clears its drift, hop, drift charge and boost, heading flYaw.
 	void ResetKartMovement( float flYaw );
@@ -230,6 +243,8 @@ private:
 	CNetworkVar( int, m_nKartDriftTier );		// mini-turbo tier the charge has reached, 0-3
 	CNetworkVar( float, m_flKartBoostEndTime );	// time the current boost ends, in the past when not boosting
 	CNetworkVar( float, m_flKartBoostScale );	// kart_max_speed multiplier of the current boost
+	CNetworkVar( int, m_nKartHitState );		// KartHitType being played out, KART_HIT_NONE when none
+	CNetworkVar( float, m_flKartHitEndTime );	// time the hit ends (and kart_hit_immunity starts counting)
 
 	// Kart race state. Only the race manager and the race flow change it.
 	friend class CKartRaceManager;
