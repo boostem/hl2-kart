@@ -11,6 +11,7 @@
 #include "tier0/memdbgon.h"
 
 ConVar kart_enabled( "kart_enabled", "1", FCVAR_REPLICATED | FCVAR_NOTIFY, "Players spawn as karts instead of HL2DM characters. Takes effect on respawn." );
+ConVar kart_model( "kart_model", KART_DEFAULT_MODEL, FCVAR_REPLICATED | FCVAR_NOTIFY, "Kart model, e.g. " KART_PLACEHOLDER_MODEL ". Takes effect on respawn. A model not precached at map start (set it before the map loads) falls back to " KART_DEFAULT_MODEL "." );
 
 // Movement tuning (defaults duplicated in cfg/kart_tuning.cfg, which the server execs at map start).
 #define KART_TUNING_FLAGS	( FCVAR_REPLICATED | FCVAR_NOTIFY )

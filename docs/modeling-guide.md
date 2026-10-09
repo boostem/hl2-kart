@@ -16,12 +16,17 @@ tools/blender/install_bst.sh    # user add-on dir, no sudo, enables the add-on
 - HL2-era low-poly props: hard-surface shapes, modest polycount (a few hundred to a few thousand triangles), 512px
   textures at most, baked AO optional.
 - The object origin is the model origin (BST exports relative to it). Put it on the floor, centred, facing +X.
+- studiomdl turns every model 90 degrees about Z unless the QC says `$origin 0 0 0 -90`, so put that in the QC
+  of a model that must face +X in game (karts, like the player). Check the result: the compiled `.mdl`'s hull
+  (six floats at byte 104) should be longest along X.
 - Asset tiers, Source-first: use Valve's own assets where they fit, then freely licensed ones recorded in
   `CREDITS.md`, and only then models built here.
 
 ## Required pieces
 
-- A reference mesh and a collision mesh (`$collisionmodel`, convex pieces, simple).
+- A reference mesh and a collision mesh (`$collisionmodel`, convex pieces, simple). studiomdl finds the convex
+  pieces by shared vertices, so shade the collision mesh smooth and give it no UVs; otherwise every triangle is its
+  own piece and it warns "Model has 2-dimensional geometry". Several pieces need `$concave` in the block.
 - `$surfaceprop` (e.g. `metal`, `wood`) and `$cdmaterials "models/<name>/"`; material names in Blender become the
   SMD material names looked up under `$cdmaterials`.
 - Naming: lowercase, underscores. Folder `assets_src/<model>/` holds `build_<model>.py`, `<model>.smd`,
@@ -49,4 +54,20 @@ blender -b -P tools/blender/render_model.py -- --smd assets_src/<m>/<m>.smd --ou
 blender -b m.blend -P tools/blender/render_model.py -- --out /tmp/<m>-renders
 ```
 
+`--texture assets_src/<m>/<m>.png` shows the base texture on the model instead of flat material colours.
+
 Attach the PNGs to the ticket; don't commit them.
+
+## Models
+
+- `assets_src/kart_scrap/`: the scrap kart (`models/kart/kart_scrap.mdl`), the default `kart_model`. About 112 x 70 x
+  50, ~3300 triangles, one 512 texture baked from procedural materials and AO in Cycles. Attachments `wheel_fl`,
+  `wheel_fr`, `wheel_rl`, `wheel_rr` (tyre contact patches on the floor), `exhaust` (pointing out of the pipe),
+  `vehicle_driver_eyes` and `item_hold` (behind the kart). `kart_debug_server 1` draws them in game. Rebuild:
+
+  ```sh
+  blender -b -P assets_src/kart_scrap/build_kart_scrap.py
+  tools/venv/bin/python tools/img2vtf.py assets_src/kart_scrap/kart_scrap.png models/kart/kart_scrap
+  git checkout game/mod_hl2mp/materials/models/kart/kart_scrap.vmt   # if the committed VMT has edits
+  tools/wine/studiomdl.sh assets_src/kart_scrap/kart_scrap.qc
+  ```

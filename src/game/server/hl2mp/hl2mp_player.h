@@ -100,6 +100,7 @@ public:
 	void SetPlayerModel( void );
 	void SetPlayerTeamModel( void );
 	void SetKartModel( void );
+	static const char *GetKartModelName( void );
 	void ApplyKartColor( void );
 
 	// Kart mode: the player entity is the kart. Latched from kart_enabled at spawn.
