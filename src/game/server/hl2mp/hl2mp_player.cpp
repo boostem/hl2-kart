@@ -31,6 +31,7 @@
 #include "SoundEmitterSystem/isoundemittersystembase.h"
 
 #include "ilagcompensationmanager.h"
+#include "IEffects.h"
 #include "tier1/fmtstr.h"
 
 int g_iLastCitizenModel = 0;
@@ -123,6 +124,7 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropFloat( SENDINFO( m_flKartBoostEndTime ), -1, SPROP_NOSCALE ),	// full precision: the local player predicts it
 	SendPropInt( SENDINFO( m_nKartHitState ), KART_NET_HIT_BITS, SPROP_UNSIGNED ),	// everyone: other karts draw their spin
 	SendPropFloat( SENDINFO( m_flKartHitEndTime ), -1, SPROP_NOSCALE ),	// full precision: the local player predicts it
+	SendPropTime( SENDINFO( m_flKartBufferEndTime ) ),	// everyone: the shield is drawn around the kart
 
 	// kart race state, for everyone's HUD and the bots
 	SendPropInt( SENDINFO( m_nKartLap ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
@@ -219,6 +221,7 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartBoostScale = 1.0f;
 	m_nKartHitState = KART_HIT_NONE;
 	m_flKartHitEndTime = 0.0f;
+	m_flKartBufferEndTime = 0.0f;
 	m_flKartTopSpeedScale = 1.0f;
 	m_flKartRespawnUnfreezeTime = 0.0f;
 	m_flKartNextRespawnCommand = 0.0f;
@@ -302,6 +305,9 @@ void CHL2MP_Player::Precache( void )
 	PrecacheScriptSound( KART_SOUND_RESPAWN );
 	PrecacheScriptSound( KART_SOUND_HIT_IMPACT );
 	PrecacheScriptSound( KART_SOUND_HIT_SPINOUT );
+	PrecacheScriptSound( KART_SOUND_BUFFER_UP );
+	PrecacheScriptSound( KART_SOUND_BUFFER_POP );
+	PrecacheMaterial( KART_BUFFER_MATERIAL );
 }
 
 void CHL2MP_Player::GiveAllItems( void )
@@ -492,6 +498,7 @@ void CHL2MP_Player::Spawn(void)
 		// The kart is the player: no weapons, no suit, no damage yet (M1), and it is
 		// drawn for the local player too so third person shows the kart.
 		ResetKartMovement( GetAbsAngles()[YAW] );	// spawn point facing
+		KartClearBuffer();
 		m_Local.m_bForceLocalPlayerDraw = true;
 		m_takedamage = DAMAGE_NO;
 		m_Local.m_iHideHUD |= KART_HIDEHUD_BITS;
@@ -812,6 +819,26 @@ bool CHL2MP_Player::KartApplyHit( KartHitType type, CBaseEntity *pAttacker )
 	if ( IsKartHitImmune() )
 		return false;
 
+	// The buffer takes the hit and breaks. The kart then gets the immunity of
+	// a hit that just ended, so it isn't hit again by what popped the buffer
+	// (still driving through the oil).
+	if ( HasKartBuffer() )
+	{
+		KartClearBuffer();
+		m_flKartHitEndTime = gpGlobals->curtime;
+		EmitSound( KART_SOUND_BUFFER_POP );
+		g_pEffects->Sparks( WorldSpaceCenter() );
+
+		if ( kart_debug_server.GetBool() )
+		{
+			CBasePlayer *pAttackerPlayer = ( pAttacker && pAttacker->IsPlayer() ) ? ToBasePlayer( pAttacker ) : NULL;
+			Msg( "[kart] %s: buffer took the %s by %s\n", GetPlayerName(), ( type == KART_HIT_SPINOUT ) ? "spin-out" : "stun",
+				pAttackerPlayer ? pAttackerPlayer->GetPlayerName() : "nobody" );
+		}
+
+		return false;
+	}
+
 	float flDuration, flSpeedScale;
 	const char *pszName;
 	if ( type == KART_HIT_SPINOUT )
@@ -863,6 +890,21 @@ bool CHL2MP_Player::KartApplyHit( KartHitType type, CBaseEntity *pAttacker )
 	}
 
 	return true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Raises the buffer for flDuration seconds; raising it again while it
+//			is up starts the time over.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::KartRaiseBuffer( float flDuration )
+{
+	m_flKartBufferEndTime = gpGlobals->curtime + MAX( flDuration, 0.0f );
+	EmitSound( KART_SOUND_BUFFER_UP );
+
+	if ( kart_debug_server.GetBool() )
+	{
+		Msg( "[kart] %s: buffer up for %.1fs\n", GetPlayerName(), flDuration );
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -940,6 +982,7 @@ void CHL2MP_Player::ResetKartRaceState( void )
 
 	// A new race starts empty-handed.
 	KartClearItem();
+	KartClearBuffer();
 }
 
 //-----------------------------------------------------------------------------
@@ -2307,6 +2350,7 @@ void CHL2MP_Player::KartStartSpectating( void )
 		return;
 
 	KartClearItem();
+	KartClearBuffer();
 	RemoveFlag( FL_FROZEN );
 
 	State_Transition( STATE_OBSERVER_MODE );
@@ -2520,9 +2564,18 @@ CON_COMMAND_F_COMPLETION( kart_hit_self, "Hit your own kart as an item would: ka
 		return;
 	}
 
+	bool bBuffer = pPlayer->HasKartBuffer() && !pPlayer->IsKartHitImmune();
 	if ( !pPlayer->KartApplyHit( type, NULL ) )
 	{
-		ClientPrint( pPlayer, HUD_PRINTCONSOLE, CFmtStr( "[kart] %s was not hit: %s\n", pPlayer->GetPlayerName(),
-			pPlayer->IsKartHitImmune() ? "still immune from the last hit" : "not a live kart, or frozen" ) );
+		const char *pszWhy = "not a live kart, or frozen";
+		if ( bBuffer && !pPlayer->HasKartBuffer() )
+		{
+			pszWhy = "the buffer took it";
+		}
+		else if ( pPlayer->IsKartHitImmune() )
+		{
+			pszWhy = "still immune from the last hit";
+		}
+		ClientPrint( pPlayer, HUD_PRINTCONSOLE, CFmtStr( "[kart] %s was not hit: %s\n", pPlayer->GetPlayerName(), pszWhy ) );
 	}
 }

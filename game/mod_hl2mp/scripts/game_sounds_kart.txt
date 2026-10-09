@@ -274,6 +274,82 @@
 	}
 }
 
+// Seeker (kart_proj_seeker): the launch, its hum while it chases, locking onto its target, and the
+// shock on the kart it hits or its fizzle when it runs out
+"Kart.SeekerLaunch"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_75dB"
+	"pitch"			"105,115"
+
+	"wave"			"npc/roller/mine/combine_mine_deploy1.wav"
+}
+
+"Kart.SeekerLoop"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.6"
+	"soundlevel"	"SNDLVL_75dB"
+	"pitch"			"110"
+
+	"wave"			"npc/roller/mine/rmine_movefast_loop1.wav"
+}
+
+"Kart.SeekerLock"
+{
+	"channel"		"CHAN_VOICE"
+	"volume"		"0.9"
+	"soundlevel"	"SNDLVL_80dB"
+
+	"wave"			"npc/roller/mine/rmine_blip1.wav"
+}
+
+"Kart.SeekerHit"
+{
+	"channel"		"CHAN_BODY"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_85dB"
+	"pitch"			"95,105"
+
+	"rndwave"
+	{
+		"wave"		"npc/roller/mine/rmine_shockvehicle1.wav"
+		"wave"		"npc/roller/mine/rmine_shockvehicle2.wav"
+	}
+}
+
+"Kart.SeekerExpire"
+{
+	"channel"		"CHAN_BODY"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_75dB"
+
+	"wave"			"npc/roller/mine/combine_mine_deactivate1.wav"
+}
+
+// Buffer (CHL2MP_Player::KartUseBuffer, KartApplyHit), from the kart: the shield going up, and popping
+// when it takes a hit
+"Kart.BufferUp"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_75dB"
+	"pitch"			"110"
+
+	"wave"			"buttons/button1.wav"
+}
+
+"Kart.BufferPop"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_80dB"
+	"pitch"			"95,105"
+
+	"wave"			"physics/glass/glass_sheet_break1.wav"
+}
+
 // Race music (kart_race_manager "music"), played by each client to itself from GO (kart_music.cpp).
 // One entry per track, named Kart.Music.<file name>; volume is scaled by kart_music_volume.
 // HL2 score by path; listen before picking a track for a map (docs/valve-content.md lists them all).

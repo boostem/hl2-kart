@@ -18,6 +18,7 @@ class C_HL2MP_Player;
 
 class CSoundPatch;
 class C_KartDriver;
+class C_KartBuffer;
 
 //=============================================================================
 //=============================================================================
@@ -152,6 +153,9 @@ public:
 	bool IsKartSpinningOut( void ) const { return m_nKartHitState == KART_HIT_SPINOUT; }
 	bool IsKartHitImmune( void ) const;
 	float GetKartHitSpinYaw( void ) const;
+	// Buffer item shield, raised and popped by the server (CHL2MP_Player::KartRaiseBuffer).
+	bool HasKartBuffer( void ) const { return gpGlobals->curtime < m_flKartBufferEndTime; }
+	float GetKartBufferEndTime( void ) const { return m_flKartBufferEndTime; }
 	// Only kart bots (server side) drive at another top speed; the local kart never does.
 	float GetKartTopSpeedScale( void ) const { return 1.0f; }
 
@@ -199,6 +203,10 @@ public:
 	// The driver: the player's model seated in the kart, hands on grip_l/grip_r, leaning into turns.
 	void UpdateKartDriver( void );
 	void RemoveKartDriver( void );
+
+	// The Buffer shield drawn around the kart while it is up.
+	void UpdateKartBuffer( void );
+	void RemoveKartBuffer( void );
 	float GetKartDriverLean( void ) const { return m_flKartDriverLean; }	// -1 full left .. +1 full right
 	float GetKartDriverLook( void ) const { return m_flKartDriverLook; }	// -1 full left .. +1 full right
 	float GetKartSteeringWheelTurn( void ) const;	// degrees the steering wheel is turned about its column, positive to the left
@@ -266,6 +274,7 @@ private:
 	float	m_flKartBoostScale;	// kart_max_speed multiplier of the current boost
 	int		m_nKartHitState;	// KartHitType being played out, KART_HIT_NONE when none
 	float	m_flKartHitEndTime;	// time the hit ends (and kart_hit_immunity starts counting)
+	float	m_flKartBufferEndTime;	// time the buffer runs out, in the past when there is none
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
 
 	// Kart race state, from the server's race manager.
@@ -319,6 +328,9 @@ private:
 	C_KartDriver	*m_pKartDriver;
 	float	m_flKartDriverLean;	// see GetKartDriverLean
 	float	m_flKartDriverLook;	// see GetKartDriverLook
+
+	// Buffer shield (client only), while m_flKartBufferEndTime is ahead.
+	C_KartBuffer	*m_pKartBuffer;
 };
 
 inline C_HL2MP_Player *ToHL2MPPlayer( CBaseEntity *pEntity )
