@@ -279,6 +279,11 @@ def write_qc(path, bones):
         lines.append('$definebone "%s" "%s" %.6f %.6f %.6f %.6f %.6f %.6f 0 0 0 0 0 0' % (
             name, bones[parent][0] if parent >= 0 else "", pos[0], pos[1], pos[2],
             math.degrees(rot[1]), math.degrees(rot[2]), math.degrees(rot[0])))
+    # With no mesh, studiomdl only flags the bones it gives a hitbox to, and the client's bone setup skips unflagged
+    # bones: their rotations would come out uninitialized. A small hitbox on every bone flags them all.
+    lines += ["", "// A hitbox on every bone, so studiomdl flags them all as used."]
+    for name, parent, pos, rot in bones:
+        lines.append('$hbox 0 "%s" -0.5 -0.5 -0.5 0.5 0.5 0.5' % name)
     lines += [
         "",
         "$poseparameter lean -1 1",
