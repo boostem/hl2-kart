@@ -8,6 +8,8 @@ HL2 Kart is a kart-racing mod built on the Source SDK 2013 multiplayer code (HL2
 cd src && ./buildallprojects
 ```
 
+Every pull request is built by CI (`.github/workflows/build.yml`, hl2mp client and server in the sniper SDK container); to read a failed run, use `gh run view <id> --log-failed`.
+
 ## Run
 
 Steam must be running and signed in.
