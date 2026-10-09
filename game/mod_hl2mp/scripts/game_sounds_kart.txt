@@ -163,11 +163,13 @@
 	"wave"			"buttons/button10.wav"
 }
 
+// Same wave as Kart.CountdownBeep, pitched up so the final-lap cue is not mistaken for a countdown beep
 "Kart.FinalLap"
 {
 	"channel"		"CHAN_STATIC"
 	"volume"		"0.8"
 	"soundlevel"	"SNDLVL_NONE"
+	"pitch"			"135"
 
 	"wave"			"buttons/button17.wav"
 }
