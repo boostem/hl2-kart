@@ -811,7 +811,7 @@
 		"enabled"		"1"
 	}
 
-	// Countdown, final lap, finish: upper center
+	// Lap, final lap, finish and place banner, upper center (CKartBanner, hl2mp/kart_hud_banner.cpp)
 	KartBanner
 	{
 		"fieldName"		"KartBanner"
@@ -823,7 +823,7 @@
 		"enabled"		"1"
 	}
 
-	// Wrong way warning, center
+	// Wrong way warning, center (CKartWrongWay, hl2mp/kart_hud_banner.cpp)
 	KartWrongWay
 	{
 		"fieldName"		"KartWrongWay"
