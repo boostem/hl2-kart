@@ -23,6 +23,7 @@ How to build a kart track in Hammer (Windows).
 | `kart_checkpoint` | brush trigger | Passed in `index` order (1, 2, 3...). Optional `respawn_target`: where karts that hit it last respawn. |
 | `kart_finish` | brush trigger | The start/finish line (checkpoint 0). Optional `respawn_target` too. |
 | `kart_respawn_zone` | brush trigger | Kill plane: karts entering it respawn at their last checkpoint. |
+| `kart_boost_pad` | brush trigger | Boosts karts driving onto it. Keyvalues `boost_duration` (1 s), `boost_scale` (1.4), `cooldown` (1 s); output `OnBoost` (activator: the kart). See [Boost pads](#boost-pads). |
 | `kart_path_node` | point | A point on the bots' racing line. Keyvalues `next`, `width`, `speed_scale`, `drift`. See [Racing line for bots](#4-racing-line-for-bots). |
 | `kart_item_box` | point | A floating item box. Keyvalues `respawn_time` (3 s), `scale` (0.6). Karts without an item take it; it comes back after `respawn_time`. |
 
@@ -47,6 +48,18 @@ checkpoints: a respawn costs only time. It lands at the checkpoint's `respawn_ta
 `info_target`, with its facing) when set, else on the ground under the trigger's center, facing the next checkpoint's
 center. Set a `respawn_target` where the center is a bad spot: over a gap, in a wall, on a jump. On a map without a
 route a respawn uses the spawn points.
+
+### Boost pads
+
+A `kart_boost_pad` gives a kart that drives onto it a boost of `boost_duration` seconds at `boost_scale` times top speed
+(a boost taken while boosting adds to what is left). Only entering the pad counts: a kart that stops on it isn't boosted
+again until it leaves, and the same pad won't boost it again within `cooldown` seconds.
+
+- Make it a thin brush trigger lying on the road, across the line karts take, 128-256 units long.
+- The trigger is invisible, so paint the road under it so drivers can see it: `dev/dev_hazzardstripe01a`,
+  `props/hazardstrip001a`, or `effects/com_shield002a`..`004a` (translucent, for a glowing look over the road).
+- The boost is given by the server. The driver's kart gets it through the networked boost state, so it shows up
+  a moment later than its own prediction would, as one small speed correction (seen with `cl_showerror 1`).
 
 ### Wrong way
 
