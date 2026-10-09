@@ -152,6 +152,7 @@ public:
 
 	// Kart engine loops, created on the client for every kart player in PVS.
 	void UpdateKartSounds( void );
+	void DrawKartDebugOverlay( void );
 	void StopKartSounds( void );
 
 	virtual void PostThink( void );

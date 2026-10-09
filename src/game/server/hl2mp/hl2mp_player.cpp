@@ -980,6 +980,15 @@ void CHL2MP_Player::PostThink( void )
 	else
 	{
 		KartItemPostThink();
+
+		if ( kart_debug_server.GetBool() )
+		{
+			Vector vecForward;
+			AngleVectors( QAngle( 0.0f, m_flKartYaw, 0.0f ), &vecForward );
+			Vector vecStart = GetAbsOrigin() + Vector( 0.0f, 0.0f, 24.0f );
+			NDebugOverlay::Line( vecStart, vecStart + vecForward * 128.0f, 255, 255, 0, true, 0.1f );
+			NDebugOverlay::Box( GetAbsOrigin(), KART_HULL_MIN, KART_HULL_MAX, 0, 255, 255, 0, 0.1f );
+		}
 	}
 
 	// Store the eye angles pitch so the client can compute its animation state correctly.
