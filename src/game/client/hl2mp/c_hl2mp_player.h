@@ -189,6 +189,7 @@ public:
 	void RemoveKartDriver( void );
 	float GetKartDriverLean( void ) const { return m_flKartDriverLean; }	// -1 full left .. +1 full right
 	float GetKartDriverLook( void ) const { return m_flKartDriverLook; }	// -1 full left .. +1 full right
+	float GetKartSteeringWheelTurn( void ) const;	// degrees the steering wheel is turned about its column, positive to the left
 	bool IsKartCamTooClose( void ) const { return m_bKartCamTooClose; }
 
 	virtual void PostThink( void );
