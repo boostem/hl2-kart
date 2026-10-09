@@ -106,6 +106,19 @@ public:
 	bool IsInKart( void ) const { return m_bKartMode; }
 	float GetKartSpeed( void ) const { return m_flKartSpeed; }
 	float GetKartYaw( void ) const { return m_flKartYaw; }
+
+	// Kart race state (see kart_race_shared.h). The race manager drives it.
+	int GetKartLap( void ) const { return m_nKartLap; }
+	int GetKartNextCheckpoint( void ) const { return m_nKartNextCheckpoint; }
+	float GetKartProgress( void ) const { return m_flKartProgress; }
+	int GetKartRacePosition( void ) const { return m_nKartRacePosition; }
+	bool IsKartFinished( void ) const { return m_bKartFinished; }
+	float GetKartLapStartTime( void ) const { return m_flKartLapStartTime; }
+	float GetKartBestLap( void ) const { return m_flKartBestLap; }
+	float GetKartTotalTime( void ) const { return m_flKartTotalTime; }
+	float GetKartFinishTime( void ) const { return m_flKartFinishTime; }
+	void ResetKartRaceState( void );
+
 	Activity TranslateTeamActivity( Activity ActToTranslate );
 	
 	float GetNextModelChangeTime( void ) { return m_flNextModelChangeTime; }
@@ -168,6 +181,18 @@ private:
 	CNetworkVar( float, m_flKartYaw );		// heading of the kart body, degrees
 	CNetworkVar( float, m_flKartReverseTime );	// seconds the brake has been held at a standstill
 	CNetworkVar( float, m_flKartBumpCooldown );	// seconds until the next bump sound may play
+
+	// Kart race state. Only CKartRaceManager changes it.
+	friend class CKartRaceManager;
+	CNetworkVar( int, m_nKartLap );
+	CNetworkVar( int, m_nKartNextCheckpoint );
+	CNetworkVar( float, m_flKartProgress );
+	CNetworkVar( int, m_nKartRacePosition );
+	CNetworkVar( bool, m_bKartFinished );
+	CNetworkVar( float, m_flKartLapStartTime );
+	CNetworkVar( float, m_flKartBestLap );
+	CNetworkVar( float, m_flKartTotalTime );
+	float m_flKartFinishTime;	// server time the player finished, orders the finishers
 
 	float m_flNextModelChangeTime;
 	float m_flNextTeamChangeTime;

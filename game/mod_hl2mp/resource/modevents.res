@@ -48,4 +48,24 @@
 		"player"	"byte"		// entindex of the player
 		"achievement"	"short"		// achievement ID
 	}
+
+	"kart_checkpoint"			// a kart hit its next checkpoint (index 0: crossed the line to start lap 1)
+	{
+		"userid"	"short"		// user ID of the player
+		"index"		"byte"		// checkpoint index
+	}
+
+	"kart_lap"				// a kart completed a lap
+	{
+		"userid"	"short"		// user ID of the player
+		"lap"		"byte"		// the lap just completed, 1..laps
+		"laptime"	"float"		// its time, seconds
+	}
+
+	"kart_race_finish"			// a kart completed its last lap
+	{
+		"userid"	"short"		// user ID of the player
+		"position"	"byte"		// finishing position, 1 for the winner
+		"totaltime"	"float"		// race time, seconds
+	}
 }

@@ -9,6 +9,8 @@
 #include "hl2mp_player.h"
 #include "kart_shareddefs.h"
 #include "igamesystem.h"
+#include "GameEventListener.h"
+#include "recipientfilter.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -185,6 +187,8 @@ BEGIN_DATADESC( CKartRaceManager )
 	DEFINE_KEYFIELD( m_iLaps, FIELD_INTEGER, "laps" ),
 	DEFINE_KEYFIELD( m_iszTrackName, FIELD_STRING, "track_name" ),
 
+	DEFINE_THINKFUNC( RaceThink ),
+
 	DEFINE_OUTPUT( m_OnRaceStart, "OnRaceStart" ),
 	DEFINE_OUTPUT( m_OnRaceFinish, "OnRaceFinish" ),
 END_DATADESC()
@@ -193,6 +197,7 @@ CKartRaceManager::CKartRaceManager()
 {
 	m_iLaps = 3;
 	m_iszTrackName = NULL_STRING;
+	m_bSomeoneFinished = false;
 }
 
 CKartRaceManager::~CKartRaceManager()
@@ -216,11 +221,26 @@ void CKartRaceManager::Spawn( void )
 
 	g_pKartRaceManager = this;
 
+	Precache();
+
 	if ( m_iLaps < 1 )
 	{
 		Warning( "[kart] kart_race_manager laps %d is invalid, using 1.\n", m_iLaps );
 		m_iLaps = 1;
 	}
+	else if ( m_iLaps > KART_MAX_LAPS )
+	{
+		Warning( "[kart] kart_race_manager laps %d is more than %d, using %d.\n", m_iLaps, KART_MAX_LAPS, KART_MAX_LAPS );
+		m_iLaps = KART_MAX_LAPS;
+	}
+}
+
+void CKartRaceManager::Precache( void )
+{
+	BaseClass::Precache();
+
+	PrecacheScriptSound( KART_SOUND_CHECKPOINT );
+	PrecacheScriptSound( KART_SOUND_LAP_COMPLETE );
 }
 
 void CKartRaceManager::Activate( void )
@@ -233,6 +253,9 @@ void CKartRaceManager::Activate( void )
 	// Every map entity has spawned by now (on map load and for ent_create alike).
 	CollectCheckpoints();
 	KartRace_ValidateMap();
+
+	SetThink( &CKartRaceManager::RaceThink );
+	SetNextThink( gpGlobals->curtime );
 }
 
 void CKartRaceManager::CollectCheckpoints( void )
@@ -245,6 +268,45 @@ void CKartRaceManager::CollectCheckpoints( void )
 	{
 		m_Checkpoints.AddToTail( list[i] );
 	}
+
+	// The route: the line, then the first trigger of each checkpoint index.
+	// Broken entries (see KartRace_ValidateMap) are left out.
+	m_Route.RemoveAll();
+	for ( int i = 0; i < list.Count(); i++ )
+	{
+		int index = list[i]->GetIndex();
+		bool bFinish = FClassnameIs( list[i], "kart_finish" );
+
+		if ( m_Route.Count() == 0 )
+		{
+			if ( !bFinish )
+				continue;
+		}
+		else if ( bFinish || index <= m_Route.Tail().index || index > KART_MAX_CHECKPOINT_INDEX )
+		{
+			continue;
+		}
+
+		RoutePoint_t &point = m_Route[m_Route.AddToTail()];
+		point.index = index;
+		point.center = list[i]->WorldSpaceCenter();
+		point.dir.Init();
+		point.length = 0.0f;
+	}
+
+	// Without a checkpoint there is no lap to drive.
+	if ( m_Route.Count() < 2 )
+	{
+		m_Route.RemoveAll();
+		return;
+	}
+
+	for ( int i = 0; i < m_Route.Count(); i++ )
+	{
+		RoutePoint_t &point = m_Route[i];
+		point.dir = m_Route[( i + 1 ) % m_Route.Count()].center - point.center;
+		point.length = VectorNormalize( point.dir );
+	}
 }
 
 CKartCheckpoint *CKartRaceManager::GetCheckpoint( int i ) const
@@ -255,16 +317,265 @@ CKartCheckpoint *CKartRaceManager::GetCheckpoint( int i ) const
 	return m_Checkpoints[i].Get();
 }
 
+int CKartRaceManager::RoutePosition( int index ) const
+{
+	for ( int i = 0; i < m_Route.Count(); i++ )
+	{
+		if ( m_Route[i].index == index )
+			return i;
+	}
+
+	return -1;
+}
+
+int CKartRaceManager::NextRouteIndex( int index ) const
+{
+	int p = RoutePosition( index );
+	if ( p < 0 )
+		return KART_FINISH_INDEX;
+
+	return m_Route[( p + 1 ) % m_Route.Count()].index;
+}
+
+bool CKartRaceManager::IsRacing( CHL2MP_Player *pPlayer )
+{
+	return pPlayer && pPlayer->IsConnected() && pPlayer->IsInKart() && !pPlayer->IsHLTV()
+		&& pPlayer->GetTeamNumber() != TEAM_SPECTATOR;
+}
+
+static void KartRace_PlaySound( CHL2MP_Player *pPlayer, const char *pszSound )
+{
+	CSingleUserRecipientFilter filter( pPlayer );
+	CBaseEntity::EmitSound( filter, pPlayer->entindex(), pszSound );
+}
+
+static void KartRace_FireCheckpointEvent( CHL2MP_Player *pPlayer, int index )
+{
+	IGameEvent *event = gameeventmanager->CreateEvent( KART_EVENT_CHECKPOINT );
+	if ( event )
+	{
+		event->SetInt( "userid", pPlayer->GetUserID() );
+		event->SetInt( "index", index );
+		gameeventmanager->FireEvent( event );
+	}
+}
+
 void CKartRaceManager::OnKartTouchedCheckpoint( CHL2MP_Player *pPlayer, int index )
 {
-	// Lap logic comes with the next ticket; log the touch for now.
 	if ( kart_debug_server.GetBool() )
 	{
-		Msg( "[kart] %s touched checkpoint %d at %.2f\n", pPlayer->GetPlayerName(), index, gpGlobals->curtime );
+		Msg( "[kart] %s touched checkpoint %d at %.2f (next %d)\n", pPlayer->GetPlayerName(), index, gpGlobals->curtime, pPlayer->m_nKartNextCheckpoint.Get() );
 	}
 	else
 	{
-		DevMsg( "[kart] %s touched checkpoint %d at %.2f\n", pPlayer->GetPlayerName(), index, gpGlobals->curtime );
+		DevMsg( "[kart] %s touched checkpoint %d at %.2f (next %d)\n", pPlayer->GetPlayerName(), index, gpGlobals->curtime, pPlayer->m_nKartNextCheckpoint.Get() );
+	}
+
+	if ( !HasRoute() || pPlayer->m_bKartFinished )
+		return;
+
+	// Out of order (skipped, driven backwards or touched twice): nothing.
+	if ( index != pPlayer->m_nKartNextCheckpoint )
+		return;
+
+	if ( index != KART_FINISH_INDEX )
+	{
+		pPlayer->m_nKartNextCheckpoint = NextRouteIndex( index );
+		KartRace_FireCheckpointEvent( pPlayer, index );
+		KartRace_PlaySound( pPlayer, KART_SOUND_CHECKPOINT );
+		return;
+	}
+
+	// First time over the line: lap 1 starts.
+	if ( pPlayer->m_nKartLap == 0 )
+	{
+		pPlayer->m_nKartLap = 1;
+		pPlayer->m_flKartLapStartTime = gpGlobals->curtime;
+		pPlayer->m_nKartNextCheckpoint = NextRouteIndex( KART_FINISH_INDEX );
+		KartRace_FireCheckpointEvent( pPlayer, index );
+		KartRace_PlaySound( pPlayer, KART_SOUND_CHECKPOINT );
+		return;
+	}
+
+	// Over the line after every checkpoint: the lap is complete.
+	float flLapTime = gpGlobals->curtime - pPlayer->m_flKartLapStartTime;
+	pPlayer->m_flKartTotalTime += flLapTime;
+	if ( pPlayer->m_flKartBestLap <= 0.0f || flLapTime < pPlayer->m_flKartBestLap )
+	{
+		pPlayer->m_flKartBestLap = flLapTime;
+	}
+
+	IGameEvent *event = gameeventmanager->CreateEvent( KART_EVENT_LAP );
+	if ( event )
+	{
+		event->SetInt( "userid", pPlayer->GetUserID() );
+		event->SetInt( "lap", pPlayer->m_nKartLap );
+		event->SetFloat( "laptime", flLapTime );
+		gameeventmanager->FireEvent( event );
+	}
+
+	KartRace_PlaySound( pPlayer, KART_SOUND_LAP_COMPLETE );
+
+	DevMsg( "[kart] %s completed lap %d/%d in %.2f\n", pPlayer->GetPlayerName(), pPlayer->m_nKartLap.Get(), m_iLaps, flLapTime );
+
+	if ( pPlayer->m_nKartLap >= m_iLaps )
+	{
+		FinishRace( pPlayer );
+		return;
+	}
+
+	pPlayer->m_nKartLap++;
+	pPlayer->m_flKartLapStartTime = gpGlobals->curtime;
+	pPlayer->m_nKartNextCheckpoint = NextRouteIndex( KART_FINISH_INDEX );
+}
+
+void CKartRaceManager::FinishRace( CHL2MP_Player *pPlayer )
+{
+	// Finishers are ranked by when they crossed the line.
+	int nPosition = 1;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pOther = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( pOther && pOther != pPlayer && IsRacing( pOther ) && pOther->m_bKartFinished )
+		{
+			nPosition++;
+		}
+	}
+
+	pPlayer->m_bKartFinished = true;
+	pPlayer->m_flKartFinishTime = gpGlobals->curtime;
+	pPlayer->m_flKartProgress = pPlayer->m_nKartLap + 1.0f;
+	pPlayer->m_nKartRacePosition = nPosition;
+
+	IGameEvent *event = gameeventmanager->CreateEvent( KART_EVENT_RACE_FINISH );
+	if ( event )
+	{
+		event->SetInt( "userid", pPlayer->GetUserID() );
+		event->SetInt( "position", nPosition );
+		event->SetFloat( "totaltime", pPlayer->m_flKartTotalTime );
+		gameeventmanager->FireEvent( event );
+	}
+
+	Msg( "[kart] %s finished %d in %.2f\n", pPlayer->GetPlayerName(), nPosition, pPlayer->m_flKartTotalTime.Get() );
+
+	// Movement keeps working; the race flow (later tickets) decides what's next.
+	if ( !m_bSomeoneFinished )
+	{
+		m_bSomeoneFinished = true;
+		m_OnRaceFinish.FireOutput( pPlayer, this );
+	}
+}
+
+void CKartRaceManager::ResetRace( void )
+{
+	m_bSomeoneFinished = false;
+
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( pPlayer )
+		{
+			pPlayer->ResetKartRaceState();
+		}
+	}
+
+	RaceThink();
+}
+
+void CKartRaceManager::RaceThink( void )
+{
+	SetNextThink( gpGlobals->curtime );
+
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( IsRacing( pPlayer ) )
+		{
+			UpdateProgress( pPlayer );
+		}
+	}
+
+	UpdatePositions();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: progress = lap + ( prev + t ) / count, where prev is the route
+//			position of the last checkpoint hit and t how far the kart is
+//			along the segment from it to the next one (its projection onto the
+//			segment, clamped to 0..1). Straight segments make it monotonic
+//			along the track; it only steps forward when a checkpoint is hit.
+//-----------------------------------------------------------------------------
+void CKartRaceManager::UpdateProgress( CHL2MP_Player *pPlayer )
+{
+	// Finishers keep the value FinishRace gave them; the dead keep their last.
+	if ( !HasRoute() || pPlayer->m_bKartFinished || !pPlayer->IsAlive() )
+		return;
+
+	const int nCount = m_Route.Count();
+	int iNext = RoutePosition( pPlayer->m_nKartNextCheckpoint );
+	if ( iNext < 0 )
+	{
+		iNext = 0;
+	}
+	int iPrev = ( iNext + nCount - 1 ) % nCount;
+
+	const RoutePoint_t &seg = m_Route[iPrev];
+	float t = 1.0f;
+	if ( seg.length > 1.0f )
+	{
+		t = clamp( DotProduct( pPlayer->WorldSpaceCenter() - seg.center, seg.dir ) / seg.length, 0.0f, 1.0f );
+	}
+
+	pPlayer->m_flKartProgress = pPlayer->m_nKartLap + ( iPrev + t ) / nCount;
+}
+
+// Finishers first, by finish time, then everyone else by progress.
+static int RaceOrderSortFunc( CHL2MP_Player * const *a, CHL2MP_Player * const *b )
+{
+	const CHL2MP_Player *pA = *a;
+	const CHL2MP_Player *pB = *b;
+
+	if ( pA->IsKartFinished() != pB->IsKartFinished() )
+		return pA->IsKartFinished() ? -1 : 1;
+
+	if ( pA->IsKartFinished() )
+	{
+		if ( pA->GetKartFinishTime() != pB->GetKartFinishTime() )
+			return pA->GetKartFinishTime() < pB->GetKartFinishTime() ? -1 : 1;
+	}
+	else if ( pA->GetKartProgress() != pB->GetKartProgress() )
+	{
+		return pA->GetKartProgress() > pB->GetKartProgress() ? -1 : 1;
+	}
+
+	return pA->entindex() - pB->entindex();
+}
+
+void CKartRaceManager::UpdatePositions( void )
+{
+	CUtlVectorFixed< CHL2MP_Player *, MAX_PLAYERS > racers;
+
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( !pPlayer )
+			continue;
+
+		if ( HasRoute() && IsRacing( pPlayer ) )
+		{
+			racers.AddToTail( pPlayer );
+		}
+		else
+		{
+			pPlayer->m_nKartRacePosition = 0;
+		}
+	}
+
+	racers.Sort( RaceOrderSortFunc );
+
+	for ( int i = 0; i < racers.Count(); i++ )
+	{
+		racers[i]->m_nKartRacePosition = i + 1;
 	}
 }
 
@@ -311,6 +622,12 @@ void KartRace_ValidateMap( void )
 			continue;
 		}
 
+		if ( index > KART_MAX_CHECKPOINT_INDEX )
+		{
+			Warning( "[kart] kart_checkpoint '%s' index %d is above the maximum of %d; it is ignored.\n", checkpoints[i]->GetDebugName(), index, KART_MAX_CHECKPOINT_INDEX );
+			continue;
+		}
+
 		if ( index < iExpected )
 		{
 			Warning( "[kart] Duplicate kart_checkpoint index %d ('%s').\n", index, checkpoints[i]->GetDebugName() );
@@ -331,6 +648,10 @@ void KartRace_ValidateMap( void )
 	if ( nFinish == 0 )
 	{
 		Warning( "[kart] Map has no kart_finish: laps can't be counted.\n" );
+	}
+	else if ( iExpected == 1 )
+	{
+		Warning( "[kart] Map has no kart_checkpoint: laps can't be counted.\n" );
 	}
 	else if ( nFinish > 1 )
 	{
@@ -420,6 +741,29 @@ private:
 			Q_snprintf( szText, sizeof( szText ), "grid %d", pStart->GetGrid() );
 			NDebugOverlay::EntityTextAtPosition( pStart->GetAbsOrigin() + Vector( 0, 0, KART_HULL_MAX.z ), 0, szText, flDuration );
 		}
+
+		CKartRaceManager *pManager = KartRaceManager();
+		if ( !pManager || !pManager->HasRoute() )
+			return;
+
+		// The route progress is measured along.
+		for ( int i = 0; i < pManager->GetRouteCount(); i++ )
+		{
+			int iNext = ( i + 1 ) % pManager->GetRouteCount();
+			NDebugOverlay::Line( pManager->GetRouteCenter( i ), pManager->GetRouteCenter( iNext ), 255, 200, 0, true, flDuration );
+		}
+
+		// Each kart's race state above it.
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+			if ( !pPlayer || !pPlayer->IsInKart() || !pPlayer->IsAlive() )
+				continue;
+
+			Q_snprintf( szText, sizeof( szText ), "P%d  lap %d/%d  next %d  %.3f%s", pPlayer->GetKartRacePosition(), pPlayer->GetKartLap(), pManager->GetLaps(),
+				pPlayer->GetKartNextCheckpoint(), pPlayer->GetKartProgress(), pPlayer->IsKartFinished() ? "  finished" : "" );
+			NDebugOverlay::EntityTextAtPosition( pPlayer->GetAbsOrigin() + Vector( 0, 0, KART_HULL_MAX.z + 16.0f ), 0, szText, flDuration );
+		}
 	}
 
 	float m_flNextDebugDraw;
@@ -430,7 +774,7 @@ static CKartRaceSystem g_KartRaceSystem;
 // ##################################################################################
 //	>> kart_race_dump
 // ##################################################################################
-CON_COMMAND( kart_race_dump, "Print the kart race setup parsed from the map: laps, track name and the checkpoint order." )
+CON_COMMAND( kart_race_dump, "Print the kart race setup parsed from the map (laps, track name, checkpoint order) and every kart's race state." )
 {
 	CKartRaceManager *pManager = KartRaceManager();
 	if ( !pManager )
@@ -458,4 +802,41 @@ CON_COMMAND( kart_race_dump, "Print the kart race setup parsed from the map: lap
 	}
 
 	KartRace_ValidateMap();
+
+	Msg( "[kart] Karts:\n" );
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( !pPlayer || !pPlayer->IsInKart() )
+			continue;
+
+		float flLapTime = 0.0f;
+		if ( pPlayer->GetKartLap() > 0 && !pPlayer->IsKartFinished() )
+		{
+			flLapTime = gpGlobals->curtime - pPlayer->GetKartLapStartTime();
+		}
+
+		Msg( "  pos %2d  %-24s lap %2d/%d  next %2d  progress %7.3f  lap %7.2fs  best %7.2fs  total %7.2fs%s\n",
+			pPlayer->GetKartRacePosition(), pPlayer->GetPlayerName(), pPlayer->GetKartLap(), pManager->GetLaps(), pPlayer->GetKartNextCheckpoint(),
+			pPlayer->GetKartProgress(), flLapTime, pPlayer->GetKartBestLap(), pPlayer->GetKartTotalTime(), pPlayer->IsKartFinished() ? "  finished" : "" );
+	}
+}
+
+// ##################################################################################
+//	>> kart_race_reset
+// ##################################################################################
+CON_COMMAND( kart_race_reset, "Put every kart back to the start of the race: lap 0, waiting for the start/finish line." )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	CKartRaceManager *pManager = KartRaceManager();
+	if ( !pManager )
+	{
+		Warning( "[kart] No kart_race_manager on this map.\n" );
+		return;
+	}
+
+	pManager->ResetRace();
+	Msg( "[kart] Race state reset.\n" );
 }
