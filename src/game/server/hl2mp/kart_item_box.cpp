@@ -7,6 +7,7 @@
 #include "cbase.h"
 #include "kart_item_box.h"
 #include "hl2mp_player.h"
+#include "kart_items.h"
 #include "Sprite.h"
 #include "tier1/fmtstr.h"
 
@@ -196,19 +197,4 @@ void CKartItemBox::BoxThink( void )
 			NDebugOverlay::EntityTextAtPosition( WorldSpaceCenter(), 0, "item box", flDuration );
 		}
 	}
-}
-
-// ##################################################################################
-//	>> Item hooks
-// ##################################################################################
-bool KartPlayerHasItem( CHL2MP_Player *pPlayer )
-{
-	// No item slot yet (#38): every kart is empty-handed.
-	return false;
-}
-
-void KartGiveRandomItem( CHL2MP_Player *pPlayer )
-{
-	// Stub until the item system (#38).
-	DevMsg( "[kart] KartGiveRandomItem( %s ): item system not implemented yet\n", pPlayer->GetPlayerName() );
 }

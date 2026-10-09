@@ -57,8 +57,4 @@ private:
 	float m_flNextDebugDraw;
 };
 
-// Item hooks, stubs until the item system (#38) lands.
-bool KartPlayerHasItem( CHL2MP_Player *pPlayer );
-void KartGiveRandomItem( CHL2MP_Player *pPlayer );
-
 #endif // KART_ITEM_BOX_H
