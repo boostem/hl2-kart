@@ -1,0 +1,5 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/kart/props/lamp_green"
+	"$surfaceprop" "glass"
+}
