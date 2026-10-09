@@ -214,6 +214,7 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_nKartDriftTier = 0;
 	m_flKartBoostEndTime = 0.0f;
 	m_flKartBoostScale = 1.0f;
+	m_flKartTopSpeedScale = 1.0f;
 	m_flKartRespawnUnfreezeTime = 0.0f;
 	m_flKartNextRespawnCommand = 0.0f;
 
@@ -270,6 +271,7 @@ void CHL2MP_Player::Precache( void )
 
 	PrecacheModel( KART_DEFAULT_MODEL );
 	PrecacheModel( KART_SCRAP_MODEL );
+	PrecacheModel( KART_DRIVER_ANIMS );
 	PrecacheModel( KART_PLACEHOLDER_MODEL );
 	if ( kart_model.GetString()[0] )
 	{
@@ -290,6 +292,7 @@ void CHL2MP_Player::Precache( void )
 	PrecacheScriptSound( "Kart.WrongWay" );
 	PrecacheScriptSound( "Kart.FinalLap" );
 	PrecacheScriptSound( "Kart.Finish" );
+	PrecacheScriptSound( "Kart.Nitro" );
 	PrecacheScriptSound( KART_SOUND_RESPAWN );
 }
 

@@ -69,6 +69,20 @@ Attach the PNGs to the ticket; don't commit them.
   angles, the steering wheel follows at `cl_kart_steer_ratio`, and in a drift the wheels counter-steer. Attachments
   `grip_l` and `grip_r` on the steering wheel rim are where the driver's hands go. Tuning: `cl_kart_steer_angle`,
   `cl_kart_steer_speed`, `cl_kart_steer_drift_counter`. A model without these bones stays rigid.
+- `assets_src/kart_driver/`: the kart driver's seated animations (`models/kart/driver_anims.mdl`), an
+  animation-only model for the ValveBiped skeleton. `kart_drive_idle` sits the driver in the racer kart (pelvis on
+  `cl_kart_driver_seat`, feet on `cl_kart_driver_feet`, palms on `grip_l`/`grip_r` at ten to two) and blends over
+  the `lean` pose parameter (-1 left .. 1 right); its `kart_head_yaw` autolayer turns the head over `head_yaw`
+  (-60 .. 60 degrees, positive left). The pose is built from code on the skeleton the script reads from the SDK's
+  `models/player/male_anims.mdl` at build time; its SMDs and QC go to the gitignored `generated/`. The client
+  (`C_KartDriver`) copies the bone rotations onto the driver's own player model by name, so it serves every
+  citizen and combine model, then IKs the feet to the pedals and the palms to the grips, turning with the
+  steering wheel. Rebuild (`--preview DIR` renders the pose as a stick figure in the kart):
+
+  ```sh
+  blender -b -P assets_src/kart_driver/build_kart_driver.py
+  tools/wine/studiomdl.sh assets_src/kart_driver/generated/kart_driver.qc
+  ```
 - `assets_src/kart_scrap/`: the scrap kart (`models/kart/kart_scrap.mdl`), the earlier default, still available as
   `kart_model models/kart/kart_scrap.mdl`. About 112 x 70 x 50, ~3300 triangles, one 512 texture baked from procedural materials and AO in Cycles. Attachments `wheel_fl`,
   `wheel_fr`, `wheel_rl`, `wheel_rr` (tyre contact patches on the floor), `exhaust` (pointing out of the pipe),

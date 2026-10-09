@@ -22,6 +22,7 @@ NODRAW = "tools/toolsnodraw"
 SKY = "tools/toolsskybox"
 TRIGGER = "tools/toolstrigger"
 START_LINE = "dev/dev_hazzardstripe01a"
+PAD = "dev/dev_hazzardstripe01a"   # bright paint for the boost pads
 
 HALF = 3072        # interior is 6144 x 6144 between the sky walls
 HEIGHT = 1024      # floor (z 0) to sky ceiling
@@ -72,12 +73,12 @@ class Map:
     def entity(self, classname, origin, **kv):
         self.entities.append((self.id(), classname, origin, kv, []))
 
-    def trigger(self, classname, x0, y0, x1, y1, **kv):
-        """A brush entity of one tools/toolstrigger box from the floor up to TRIGGER_H."""
+    def trigger(self, classname, x0, y0, x1, y1, height=TRIGGER_H, **kv):
+        """A brush entity of one tools/toolstrigger box from the floor up to `height` (default TRIGGER_H)."""
         eid = self.id()
         solids = []
         self.target = solids
-        self.box(x0, y0, 0, x1, y1, TRIGGER_H, {"top": TRIGGER, "bottom": TRIGGER, "side": TRIGGER})
+        self.box(x0, y0, 0, x1, y1, height, {"top": TRIGGER, "bottom": TRIGGER, "side": TRIGGER})
         self.target = self.solids
         self.entities.append((eid, classname, None, dict(kv, spawnflags="1", StartDisabled="0"), solids))
 
@@ -202,6 +203,21 @@ def build():
     lx0, lx1 = -704, 64
     m.prism([(lx0, jy0), (lx1, jy0), (lx1, jy1), (lx0, jy1)], SINK, [0, 64, 64, 0], ramp)
 
+    # Boost pads on the south straight, across the racing line (y -2160): a bright 4-high slab for paint, with a
+    # 64-high kart_boost_pad trigger over it. The first sits between the cones at x 0 and 512, the second
+    # between the cones at x 512 and 1024. Cones are at y -2400, clear of the pads.
+    pad_paint = {"top": PAD, "bottom": NODRAW, "side": PAD}
+    for px in (192, 704):
+        m.box(px, -2320, SINK, px + 256, -2000, 4, pad_paint)
+        m.trigger("kart_boost_pad", px, -2320, px + 256, -2000, height=64, boost_duration="1.0", boost_scale="1.4",
+                  cooldown="1.0")
+
+    # Drift practice hairpin in the west lane (driven south): two staggered concrete barriers, each reaching 800
+    # across the 1216-wide lane from one side, so the line weaves left, back right and out again.
+    barrier_brush = {"top": WALL, "bottom": NODRAW, "side": WALL}
+    m.box(-INNER, 560, 0, -INNER + 800, 640, WALL_H, barrier_brush)     # from the outer wall, gap on the island side
+    m.box(-ISLAND - 800, -640, 0, -ISLAND, -560, WALL_H, barrier_brush)  # from the island, gap on the outer side
+
     # Race: 3 laps counter-clockwise. The start/finish line crosses the south lane at FINISH_X, and 5 checkpoints
     # follow round the loop, each full lane width (outer wall to island) and TRIGGER_H tall.
     m.entity("kart_race_manager", (FINISH_X, -LANE_MID, 64), targetname="race", laps="3", track_name="Kart Arena")
@@ -249,7 +265,7 @@ def build():
     nodes += [(p, arc) for p in corner(ISLAND, ISLAND, 0)]
     nodes += [((1200, 2400), straight), ((400, 2400), straight), ((-300, 2400), straight), ((-1150, 2400), hint)]
     nodes += [(p, arc) for p in corner(-ISLAND, ISLAND, 90)]
-    nodes += [((-2400, 1100), straight), ((-2400, 300), straight), ((-2400, -500), straight), ((-2392, -1200), hint)]
+    nodes += [((-2400, 1100), hint), ((-2000, 600), arc), ((-2800, -600), arc), ((-2392, -1200), straight)]
     nodes += [(p, arc) for p in corner(-ISLAND, -ISLAND, 180)]
     for i, ((x, y), kv) in enumerate(nodes):
         m.entity("kart_path_node", (int(round(x)), int(round(y)), 16), targetname="line%02d" % i,
@@ -299,7 +315,8 @@ def build():
         if t > -ISLAND + 640:
             prop(barrier, (edge, t, 0), 0)         # east
         prop(barrier, (t, edge, 0), 90)            # north
-        prop(barrier, (-edge, t, 0), 0)            # west
+        if abs(t) != 512:
+            prop(barrier, (-edge, t, 0), 0)        # west, except where the hairpin's barriers meet the wall
     # Lampposts in the arena's corners and the middle of each island side.
     c = INNER - 96
     for x, y in ((-c, -c), (c, -c), (c, c), (-c, c)):

@@ -1,0 +1,16 @@
+"UnlitGeneric"
+{
+	"$basetexture" "models/kart/props/boost_pad_glow"
+	"$model" "1"
+	"$surfaceprop" "metal"
+
+	"Proxies"
+	{
+		"TextureScroll"
+		{
+			"texturescrollvar" "$basetexturetransform"
+			"texturescrollrate" "1.5"
+			"texturescrollangle" "180"
+		}
+	}
+}
