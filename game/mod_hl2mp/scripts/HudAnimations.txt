@@ -886,3 +886,44 @@ event KartTimerBestLap
 	Animate KartTimer	BestFlash	"1"		Linear	0.5		0.05
 	Animate KartTimer	BestFlash	"0"		Deaccel	0.75	1.0
 }
+
+// Driving the wrong way (CKartWrongWay): pops in, then blinks until KartWrongWayHide.
+event KartWrongWayFlash
+{
+	Animate KartWrongWay	Alpha		"1"		Linear	0.0		0.05
+	RunEvent KartWrongWayBlink	0.3
+}
+
+event KartWrongWayBlink
+{
+	Animate KartWrongWay	Alpha		"0.25"	Deaccel	0.0		0.2
+	Animate KartWrongWay	Alpha		"1"		Linear	0.3		0.05
+	RunEvent KartWrongWayBlink	0.6
+}
+
+// Back on the right way (CKartWrongWay): stop blinking.
+event KartWrongWayHide
+{
+	StopEvent KartWrongWayFlash	0.0
+	StopEvent KartWrongWayBlink	0.0
+	Animate KartWrongWay	Alpha		"0"		Linear	0.0		0.0
+}
+
+// A lap banner (CKartBanner): drops in, holds, fades out.
+event KartBannerShow
+{
+	Animate KartBanner	Alpha		"0"		Linear	0.0		0.0
+	Animate KartBanner	Offset		"-16"	Linear	0.0		0.0
+	Animate KartBanner	Alpha		"1"		Linear	0.0		0.15
+	Animate KartBanner	Offset		"0"		Deaccel	0.0		0.3
+	Animate KartBanner	Alpha		"0"		Accel	1.6		0.4
+}
+
+// The finishing place (CKartBanner): drops in and stays.
+event KartBannerHold
+{
+	Animate KartBanner	Alpha		"0"		Linear	0.0		0.0
+	Animate KartBanner	Offset		"-16"	Linear	0.0		0.0
+	Animate KartBanner	Alpha		"1"		Linear	0.0		0.15
+	Animate KartBanner	Offset		"0"		Deaccel	0.0		0.3
+}

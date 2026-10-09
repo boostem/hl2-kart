@@ -15,6 +15,7 @@
 #include "hl2mp_player.h"
 #endif
 
+#include "kart_shareddefs.h"
 #include "engine/IEngineSound.h"
 #include "SoundEmitterSystem/isoundemittersystembase.h"
 
@@ -155,6 +156,43 @@ void CHL2MP_Player::KartGiveBoost( float flDuration, float flSpeedScale )
 		m_flKartBoostEndTime = gpGlobals->curtime + flDuration;
 		m_flKartBoostScale = flSpeedScale;
 	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: True while a hit is being played out and for kart_hit_immunity after
+//			it ends: no new hit lands (see KartApplyHit).
+//-----------------------------------------------------------------------------
+bool CHL2MP_Player::IsKartHitImmune( void ) const
+{
+	if ( m_nKartHitState != KART_HIT_NONE )
+		return true;
+
+	return m_flKartHitEndTime > 0.0f && gpGlobals->curtime < m_flKartHitEndTime + kart_hit_immunity.GetFloat();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Degrees the kart's body is drawn turned from its heading during a
+//			spin-out (0 otherwise). The heading itself never spins: the kart
+//			keeps sliding straight and the chase camera, which follows the
+//			heading, stays steady. kart_spinout_turns whole turns, fast at the
+//			hit and slowing to a stop as the spin-out ends, so the body is back
+//			on the heading when control returns. Shared so every client draws
+//			every kart's spin the same way from the networked hit state.
+//-----------------------------------------------------------------------------
+float CHL2MP_Player::GetKartHitSpinYaw( void ) const
+{
+	if ( m_nKartHitState != KART_HIT_SPINOUT )
+		return 0.0f;
+
+	float flTime = kart_spinout_time.GetFloat();
+	if ( flTime <= 0.0f )
+		return 0.0f;
+
+	// The turns left go with the square of the time left: the spin rate falls
+	// linearly to zero. Positive yaw is left, so the kart spins anticlockwise.
+	float flLeft = clamp( ( m_flKartHitEndTime - gpGlobals->curtime ) / flTime, 0.0f, 1.0f );
+	float flTurns = (float)MAX( RoundFloatToInt( kart_spinout_turns.GetFloat() ), 0 );
+	return AngleNormalize( 360.0f * flTurns * flLeft * flLeft );
 }
 
 

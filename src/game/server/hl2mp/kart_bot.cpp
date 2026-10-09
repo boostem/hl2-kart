@@ -642,8 +642,8 @@ void CKartBotSystem::BuildCommand( CHL2MP_Player *pBot, KartBotState_t &st, CUse
 
 	cmd.viewangles = QAngle( 0.0f, pBot->GetKartYaw(), 0.0f );
 
-	// Held on the grid or at the results: no input, and it isn't stuck.
-	if ( pBot->GetFlags() & FL_FROZEN )
+	// Held on the grid, at the results or spinning out: no input, and it isn't stuck.
+	if ( ( pBot->GetFlags() & FL_FROZEN ) || pBot->IsKartSpinningOut() )
 	{
 		st.nDrift = 0;
 		st.ResetProgress();

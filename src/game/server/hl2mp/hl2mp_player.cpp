@@ -120,6 +120,8 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropModelIndex( SENDINFO( m_nKartDriverModel ) ),
 	SendPropInt( SENDINFO( m_nKartDriftTier ), 2, SPROP_UNSIGNED ),	// 0-3, for mini-turbo spark effects on every kart
 	SendPropFloat( SENDINFO( m_flKartBoostEndTime ), -1, SPROP_NOSCALE ),	// full precision: the local player predicts it
+	SendPropInt( SENDINFO( m_nKartHitState ), KART_NET_HIT_BITS, SPROP_UNSIGNED ),	// everyone: other karts draw their spin
+	SendPropFloat( SENDINFO( m_flKartHitEndTime ), -1, SPROP_NOSCALE ),	// full precision: the local player predicts it
 
 	// kart race state, for everyone's HUD and the bots
 	SendPropInt( SENDINFO( m_nKartLap ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
@@ -214,6 +216,8 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_nKartDriftTier = 0;
 	m_flKartBoostEndTime = 0.0f;
 	m_flKartBoostScale = 1.0f;
+	m_nKartHitState = KART_HIT_NONE;
+	m_flKartHitEndTime = 0.0f;
 	m_flKartTopSpeedScale = 1.0f;
 	m_flKartRespawnUnfreezeTime = 0.0f;
 	m_flKartNextRespawnCommand = 0.0f;
@@ -289,8 +293,13 @@ void CHL2MP_Player::Precache( void )
 	PrecacheScriptSound( "Kart.Skid" );
 	PrecacheScriptSound( "Kart.Impact" );
 	PrecacheScriptSound( "Kart.RouletteTick" );
+	PrecacheScriptSound( "Kart.WrongWay" );
+	PrecacheScriptSound( "Kart.FinalLap" );
+	PrecacheScriptSound( "Kart.Finish" );
 	PrecacheScriptSound( "Kart.Nitro" );
 	PrecacheScriptSound( KART_SOUND_RESPAWN );
+	PrecacheScriptSound( KART_SOUND_HIT_IMPACT );
+	PrecacheScriptSound( KART_SOUND_HIT_SPINOUT );
 }
 
 void CHL2MP_Player::GiveAllItems( void )
@@ -775,8 +784,83 @@ void CHL2MP_Player::ResetKartMovement( float flYaw )
 	m_nKartDriftTier = 0;
 	m_flKartBoostEndTime = 0.0f;
 	m_flKartBoostScale = 1.0f;
+	m_nKartHitState = KART_HIT_NONE;
+	m_flKartHitEndTime = 0.0f;
 	m_bKartWrongWay = false;
 	m_flKartWrongWayTime = 0.0f;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: An item hit the kart: it spins out or is stunned. Server-only entry
+//			into a predicted state: the speed cut, the dropped drift and boost and
+//			the hit state all reach the local player at once, as one prediction
+//			correction, and from there CKartGameMovement plays the hit out and
+//			ends it on both sides. The kart can't be hit again until
+//			kart_hit_immunity after the hit ends.
+//-----------------------------------------------------------------------------
+bool CHL2MP_Player::KartApplyHit( KartHitType type, CBaseEntity *pAttacker )
+{
+	if ( type != KART_HIT_SPINOUT && type != KART_HIT_STUN )
+		return false;
+
+	// Held on the grid, at the results or after a respawn: nothing to hit.
+	if ( !IsInKart() || !IsAlive() || IsObserver() || ( GetFlags() & FL_FROZEN ) )
+		return false;
+
+	if ( IsKartHitImmune() )
+		return false;
+
+	float flDuration, flSpeedScale;
+	const char *pszName;
+	if ( type == KART_HIT_SPINOUT )
+	{
+		flDuration = kart_spinout_time.GetFloat();
+		flSpeedScale = kart_spinout_speed_scale.GetFloat();
+		pszName = "spin-out";
+	}
+	else
+	{
+		flDuration = kart_stun_time.GetFloat();
+		flSpeedScale = kart_stun_speed_scale.GetFloat();
+		pszName = "stun";
+	}
+
+	m_nKartHitState = type;
+	m_flKartHitEndTime = gpGlobals->curtime + MAX( flDuration, 0.0f );
+	m_flKartSpeed = m_flKartSpeed * flSpeedScale;
+
+	// The drift ends with no mini-turbo, and any boost stops.
+	m_nKartDriftDir = 0;
+	m_flKartDriftTime = 0.0f;
+	m_flKartDriftCharge = 0.0f;
+	m_nKartDriftTier = 0;
+	m_flKartBoostEndTime = 0.0f;
+	m_flKartBoostScale = 1.0f;
+
+	EmitSound( KART_SOUND_HIT_IMPACT );
+	if ( type == KART_HIT_SPINOUT )
+	{
+		EmitSound( KART_SOUND_HIT_SPINOUT );
+	}
+
+	CBasePlayer *pAttackerPlayer = ( pAttacker && pAttacker->IsPlayer() ) ? ToBasePlayer( pAttacker ) : NULL;
+
+	IGameEvent *event = gameeventmanager->CreateEvent( KART_EVENT_HIT );
+	if ( event )
+	{
+		event->SetInt( "userid", GetUserID() );
+		event->SetInt( "attacker", pAttackerPlayer ? pAttackerPlayer->GetUserID() : 0 );
+		event->SetInt( "type", type );
+		gameeventmanager->FireEvent( event );
+	}
+
+	if ( kart_debug_server.GetBool() )
+	{
+		Msg( "[kart] %s: %s for %.2fs by %s, speed now %.0f\n", GetPlayerName(), pszName, flDuration,
+			pAttackerPlayer ? pAttackerPlayer->GetPlayerName() : "nobody", m_flKartSpeed.Get() );
+	}
+
+	return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -1030,8 +1114,8 @@ void CHL2MP_Player::KartItemPostThink( void )
 		}
 	}
 
-	// No items while held on the grid or at the results.
-	if ( !IsAlive() || ( GetFlags() & FL_FROZEN ) )
+	// No items while held on the grid, at the results or spinning out.
+	if ( !IsAlive() || ( GetFlags() & FL_FROZEN ) || IsKartSpinningOut() )
 		return;
 
 	bool bBackward;
@@ -2368,4 +2452,63 @@ bool CHL2MP_Player::IsThreatFiringAtMe( CBaseEntity* threat ) const
 	}
 
 	return false;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Testing the hit reactions without items.
+//-----------------------------------------------------------------------------
+static int KartHitSelfAutocomplete( const char *pszPartial, char commands[ COMMAND_COMPLETION_MAXITEMS ][ COMMAND_COMPLETION_ITEM_LENGTH ] )
+{
+	static const char *s_pszTypes[] = { "spin", "stun" };
+	const char *pszArg = Q_strstr( pszPartial, " " );
+	pszArg = pszArg ? pszArg + 1 : "";
+	int nArgLen = Q_strlen( pszArg );
+
+	int nMatches = 0;
+	for ( int i = 0; i < ARRAYSIZE( s_pszTypes ); i++ )
+	{
+		if ( !Q_strnicmp( s_pszTypes[i], pszArg, nArgLen ) )
+		{
+			Q_snprintf( commands[nMatches++], COMMAND_COMPLETION_ITEM_LENGTH, "kart_hit_self %s", s_pszTypes[i] );
+		}
+	}
+	return nMatches;
+}
+
+CON_COMMAND_F_COMPLETION( kart_hit_self, "Hit your own kart as an item would: kart_hit_self spin|stun. sv_cheats only.", FCVAR_CHEAT, KartHitSelfAutocomplete )
+{
+	if ( !sv_cheats || !sv_cheats->GetBool() )
+	{
+		Warning( "[kart] kart_hit_self needs sv_cheats 1.\n" );
+		return;
+	}
+
+	CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_GetCommandClient() );
+	if ( !pPlayer )
+	{
+		Warning( "[kart] kart_hit_self: run it as a player.\n" );
+		return;
+	}
+
+	KartHitType type;
+	const char *pszType = args.ArgC() >= 2 ? args.Arg( 1 ) : "";
+	if ( !Q_stricmp( pszType, "spin" ) || !Q_stricmp( pszType, "spinout" ) )
+	{
+		type = KART_HIT_SPINOUT;
+	}
+	else if ( !Q_stricmp( pszType, "stun" ) )
+	{
+		type = KART_HIT_STUN;
+	}
+	else
+	{
+		Msg( "Usage: kart_hit_self spin|stun\n" );
+		return;
+	}
+
+	if ( !pPlayer->KartApplyHit( type, NULL ) )
+	{
+		Msg( "[kart] %s was not hit: %s\n", pPlayer->GetPlayerName(),
+			pPlayer->IsKartHitImmune() ? "still immune from the last hit" : "not a live kart, or frozen" );
+	}
 }

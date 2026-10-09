@@ -70,6 +70,7 @@ BEGIN_NETWORK_TABLE_NOBASE( CHL2MPRules, DT_HL2MPRules )
 		RecvPropArray3( RECVINFO_ARRAY( m_flKartStandingBestLap ), RecvPropFloat( RECVINFO( m_flKartStandingBestLap[0] ) ) ),
 		RecvPropArray3( RECVINFO_ARRAY( m_flKartStandingTotalTime ), RecvPropFloat( RECVINFO( m_flKartStandingTotalTime[0] ) ) ),
 		RecvPropArray3( RECVINFO_ARRAY( m_flKartStandingLapStartTime ), RecvPropFloat( RECVINFO( m_flKartStandingLapStartTime[0] ) ) ),
+		RecvPropString( RECVINFO( m_szKartMusic ) ),
 	#else
 		SendPropBool( SENDINFO( m_bTeamPlayEnabled ) ),
 		SendPropInt( SENDINFO( m_nKartRaceState ), KART_NET_RACE_STATE_BITS, SPROP_UNSIGNED ),
@@ -82,6 +83,7 @@ BEGIN_NETWORK_TABLE_NOBASE( CHL2MPRules, DT_HL2MPRules )
 		SendPropArray3( SENDINFO_ARRAY3( m_flKartStandingBestLap ), SendPropFloat( SENDINFO_ARRAY( m_flKartStandingBestLap ), 0, SPROP_NOSCALE ) ),
 		SendPropArray3( SENDINFO_ARRAY3( m_flKartStandingTotalTime ), SendPropFloat( SENDINFO_ARRAY( m_flKartStandingTotalTime ), 0, SPROP_NOSCALE ) ),
 		SendPropArray3( SENDINFO_ARRAY3( m_flKartStandingLapStartTime ), SendPropFloat( SENDINFO_ARRAY( m_flKartStandingLapStartTime ), 0, SPROP_NOSCALE ) ),
+		SendPropString( SENDINFO( m_szKartMusic ) ),
 	#endif
 
 END_NETWORK_TABLE()
@@ -227,6 +229,7 @@ CHL2MPRules::CHL2MPRules()
 {
 	m_nKartLaps = 0;
 	m_nKartRacers = 0;
+	m_szKartMusic.GetForModify()[0] = '\0';
 
 	for ( int i = 0; i < MAX_PLAYERS_ARRAY_SAFE; i++ )
 	{

@@ -184,9 +184,13 @@ static bool KartItemUse_Stub( CHL2MP_Player *pPlayer, bool bBackward )
 ConVar kart_nitro_duration( "kart_nitro_duration", "1.2", FCVAR_NOTIFY, "Seconds of boost per Nitro Can charge.", true, 0.0f, true, 10.0f );
 ConVar kart_nitro_scale( "kart_nitro_scale", "1.5", FCVAR_NOTIFY, "Speed scale of the Nitro Can boost.", true, 1.0f, true, 5.0f );
 
-// Nitro Can: an instant boost, one per charge.
+// Nitro Can: an instant boost, one per charge. Not while stunned: a hit stops
+// any boost, so the charge is kept for when control comes back.
 static bool KartItemUse_Nitro( CHL2MP_Player *pPlayer, bool bBackward )
 {
+	if ( pPlayer->IsKartHit() )
+		return false;
+
 	pPlayer->KartGiveBoost( kart_nitro_duration.GetFloat(), kart_nitro_scale.GetFloat() );
 	pPlayer->EmitSound( "Kart.Nitro" );
 	return true;

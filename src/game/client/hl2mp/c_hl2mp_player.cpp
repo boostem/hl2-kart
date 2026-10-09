@@ -120,6 +120,8 @@ IMPLEMENT_CLIENTCLASS_DT(C_HL2MP_Player, DT_HL2MP_Player, CHL2MP_Player)
 	RecvPropInt( RECVINFO( m_nKartDriverModel ) ),
 	RecvPropInt( RECVINFO( m_nKartDriftTier ) ),
 	RecvPropFloat( RECVINFO( m_flKartBoostEndTime ) ),
+	RecvPropInt( RECVINFO( m_nKartHitState ) ),
+	RecvPropFloat( RECVINFO( m_flKartHitEndTime ) ),
 
 	RecvPropInt( RECVINFO( m_nKartLap ) ),
 	RecvPropInt( RECVINFO( m_nKartNextCheckpoint ) ),
@@ -157,6 +159,8 @@ BEGIN_PREDICTION_DATA( C_HL2MP_Player )
 	DEFINE_PRED_FIELD( m_nKartDriftTier, FIELD_INTEGER, FTYPEDESC_INSENDTABLE ),
 	DEFINE_PRED_FIELD_TOL( m_flKartBoostEndTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
 	DEFINE_PRED_FIELD_TOL( m_flKartBoostScale, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
+	DEFINE_PRED_FIELD( m_nKartHitState, FIELD_INTEGER, FTYPEDESC_INSENDTABLE ),
+	DEFINE_PRED_FIELD_TOL( m_flKartHitEndTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
 
 	// misyl: Ammo is server side entities in HL2MP. Not catastrophic to error about.
 	// Just let the server stomp all over us.
@@ -220,6 +224,8 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_nKartDriftTier = 0;
 	m_flKartBoostEndTime = 0.0f;
 	m_flKartBoostScale = 1.0f;
+	m_nKartHitState = KART_HIT_NONE;
+	m_flKartHitEndTime = 0.0f;
 	m_angKartRenderAngles.Init();
 
 	m_nKartLap = 0;
@@ -522,6 +528,10 @@ void C_HL2MP_Player::DrawKartDebugOverlay( void )
 	DebugRow( "|velocity|", "%.1f", GetAbsVelocity().Length() );
 	DebugRow( "kart yaw", "%.1f", m_flKartYaw );
 	DebugRow( "camera yaw", "%.1f", m_flKartCamYaw );
+	static const char *s_pszHitStates[KART_HIT_COUNT] = { "none", "spin-out", "stun" };
+	int nHit = clamp( m_nKartHitState, 0, KART_HIT_COUNT - 1 );
+	DebugRow( "hit", "%s %.2fs%s", s_pszHitStates[nHit], MAX( 0.0f, m_flKartHitEndTime - gpGlobals->curtime ),
+		( nHit == KART_HIT_NONE && IsKartHitImmune() ) ? " (immune)" : "" );
 	DebugRow( "grounded", "%s", ( GetFlags() & FL_ONGROUND ) ? "yes" : "no" );
 	DebugRow( "origin", "%.1f %.1f %.1f", vecOrigin.x, vecOrigin.y, vecOrigin.z );
 	DebugRow( "throttle", "%d (W=+1, S=-1)", nThrottle );
@@ -1890,6 +1900,9 @@ const QAngle& C_HL2MP_Player::GetRenderAngles()
 		// The kart body faces its own heading, not the eyes. The local player's is
 		// predicted; for everyone else the server's angles are all we have.
 		float flYaw = IsLocalPlayer() ? m_flKartYaw : GetAbsAngles()[YAW];
+
+		// A spin-out turns the body only, never the heading or the camera.
+		flYaw += GetKartHitSpinYaw();
 
 		// The karts built for this mod face +X; HL2's jeep faces -Y and would
 		// drive sideways.

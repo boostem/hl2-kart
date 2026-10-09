@@ -107,4 +107,12 @@ inline const char *KartRaceStateName( int state )
 // Game sound played at the kart when it is put back on the track, heard by everyone.
 #define KART_SOUND_RESPAWN			"Kart.Respawn"
 
+// Race music (game_sounds_kart.txt): kart_race_manager "music" names one of
+// the KART_MUSIC_PREFIX entries, played to everyone from GO; the sting plays
+// when the local kart finishes.
+#define KART_MUSIC_PREFIX			"Kart.Music."
+#define KART_SOUND_MUSIC_FINISH		"Kart.Music.Finish"
+#define KART_MUSIC_NAME_LENGTH		64
+#define KART_MUSIC_DEFAULT			"Kart.Music.hl2_song20_submix0"
+
 #endif // KART_RACE_SHARED_H

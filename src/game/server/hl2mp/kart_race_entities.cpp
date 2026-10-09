@@ -12,6 +12,9 @@
 #include "igamesystem.h"
 #include "GameEventListener.h"
 #include "recipientfilter.h"
+#include "SoundEmitterSystem/isoundemittersystembase.h"
+
+extern ISoundEmitterSystemBase *soundemitterbase;
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -237,7 +240,8 @@ void CKartBoostPad::StartTouch( CBaseEntity *pOther )
 		return;
 
 	CHL2MP_Player *pPlayer = ToHL2MPPlayer( pOther );
-	if ( !pPlayer || !pPlayer->IsInKart() || !pPlayer->IsAlive() )
+	// A hit stops any boost (CKartGameMovement), so a kart that is hit gets nothing.
+	if ( !pPlayer || !pPlayer->IsInKart() || !pPlayer->IsAlive() || pPlayer->IsKartHit() )
 		return;
 
 	int iSlot = pPlayer->entindex();
@@ -377,6 +381,7 @@ BEGIN_DATADESC( CKartRaceManager )
 	DEFINE_KEYFIELD( m_iLaps, FIELD_INTEGER, "laps" ),
 	DEFINE_KEYFIELD( m_iszTrackName, FIELD_STRING, "track_name" ),
 	DEFINE_KEYFIELD( m_iszKillZ, FIELD_STRING, "kill_z" ),
+	DEFINE_KEYFIELD( m_iszMusic, FIELD_STRING, "music" ),
 
 	DEFINE_THINKFUNC( RaceThink ),
 
@@ -389,6 +394,7 @@ CKartRaceManager::CKartRaceManager()
 	m_iLaps = 3;
 	m_iszTrackName = NULL_STRING;
 	m_iszKillZ = NULL_STRING;
+	m_iszMusic = NULL_STRING;
 	m_bHasKillZ = false;
 	m_flKillZ = 0.0f;
 	m_bSomeoneFinished = false;
@@ -444,6 +450,58 @@ void CKartRaceManager::Spawn( void )
 	{
 		HL2MPRules()->SetKartLaps( m_iLaps );
 	}
+
+	SetupMusic();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Resolves "music" to its Kart.Music.* game sound and hands it to the
+//			game rules for the clients. It may name the entry itself or the
+//			track's file: "music/hl2_song20_submix0.mp3" (with or without
+//			"sound/") is "Kart.Music.hl2_song20_submix0". Empty means the
+//			default track, "none" no music.
+//-----------------------------------------------------------------------------
+void CKartRaceManager::SetupMusic( void )
+{
+	const char *pszMusic = ( m_iszMusic != NULL_STRING ) ? STRING( m_iszMusic ) : "";
+	if ( pszMusic[0] == '\0' )
+	{
+		pszMusic = KART_MUSIC_DEFAULT;
+	}
+
+	char szSound[KART_MUSIC_NAME_LENGTH];
+	szSound[0] = '\0';
+
+	if ( !Q_stricmp( pszMusic, "none" ) )
+	{
+		// No music.
+	}
+	else if ( !Q_strnicmp( pszMusic, KART_MUSIC_PREFIX, Q_strlen( KART_MUSIC_PREFIX ) ) )
+	{
+		Q_strncpy( szSound, pszMusic, sizeof( szSound ) );
+	}
+	else
+	{
+		char szBase[MAX_PATH];
+		Q_FileBase( pszMusic, szBase, sizeof( szBase ) );
+		Q_snprintf( szSound, sizeof( szSound ), "%s%s", KART_MUSIC_PREFIX, szBase );
+	}
+
+	if ( szSound[0] != '\0' && !soundemitterbase->IsValidIndex( soundemitterbase->GetSoundIndex( szSound ) ) )
+	{
+		Warning( "[kart] kart_race_manager music '%s': no game sound '%s' in game_sounds_kart.txt, the race has no music.\n", pszMusic, szSound );
+		szSound[0] = '\0';
+	}
+
+	if ( szSound[0] != '\0' )
+	{
+		PrecacheScriptSound( szSound );
+	}
+
+	if ( HL2MPRules() )
+	{
+		HL2MPRules()->SetKartMusic( szSound );
+	}
 }
 
 void CKartRaceManager::Precache( void )
@@ -452,6 +510,7 @@ void CKartRaceManager::Precache( void )
 
 	PrecacheScriptSound( KART_SOUND_CHECKPOINT );
 	PrecacheScriptSound( KART_SOUND_LAP_COMPLETE );
+	PrecacheScriptSound( KART_SOUND_MUSIC_FINISH );
 }
 
 void CKartRaceManager::Activate( void )

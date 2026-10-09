@@ -2,8 +2,8 @@
 //
 // Purpose: Map entities that define a kart race:
 //
-//			kart_race_manager	one per map: lap count, track name, the ordered
-//								checkpoint list and the race outputs.
+//			kart_race_manager	one per map: lap count, track name, music, the
+//								ordered checkpoint list and the race outputs.
 //			kart_start			a grid slot karts spawn on, ordered by "grid".
 //			kart_checkpoint		brush trigger, "index" 1..N in track order.
 //			kart_finish			brush trigger, the start/finish line (checkpoint 0).
@@ -252,10 +252,12 @@ private:
 	void CheckKillZ( void );
 	void UpdatePositions( void );
 	void FinishRace( CHL2MP_Player *pPlayer, bool bDNF );
+	void SetupMusic( void );
 
 	int m_iLaps;
 	string_t m_iszTrackName;
 	string_t m_iszKillZ;	// "kill_z" as typed: empty for none
+	string_t m_iszMusic;	// "music" as typed: empty for the default track
 	bool m_bHasKillZ;
 	float m_flKillZ;
 	CUtlVector< CHandle< CKartCheckpoint > > m_Checkpoints;

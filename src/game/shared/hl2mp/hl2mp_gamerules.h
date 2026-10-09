@@ -183,9 +183,13 @@ public:
 	// karts are racing. Set by the race manager, read by the HUD.
 	int		GetKartLaps( void ) const { return m_nKartLaps; }
 	int		GetKartRacers( void ) const { return m_nKartRacers; }
+	// The race music's game sound (a Kart.Music.* entry), empty for none. Set
+	// by the race manager, played by the client (kart_music.cpp).
+	const char *GetKartMusic( void ) const { return m_szKartMusic.Get(); }
 #ifndef CLIENT_DLL
 	void	SetKartLaps( int nLaps ) { m_nKartLaps = nLaps; }
 	void	SetKartRacers( int nRacers ) { m_nKartRacers = nRacers; }
+	void	SetKartMusic( const char *pszSound ) { Q_strncpy( m_szKartMusic.GetForModify(), pszSound, KART_MUSIC_NAME_LENGTH ); }
 #endif
 
 	// Kart race standings by player index (1..maxClients), for the scoreboard.
@@ -231,6 +235,7 @@ private:
 	CNetworkArray( float, m_flKartStandingBestLap, MAX_PLAYERS_ARRAY_SAFE );
 	CNetworkArray( float, m_flKartStandingTotalTime, MAX_PLAYERS_ARRAY_SAFE );	// sum of the completed laps
 	CNetworkArray( float, m_flKartStandingLapStartTime, MAX_PLAYERS_ARRAY_SAFE );
+	CNetworkString( m_szKartMusic, KART_MUSIC_NAME_LENGTH );
 	CNetworkVar( float, m_flGameStartTime );
 	CUtlVector<EHANDLE> m_hRespawnableItemsAndWeapons;
 	float m_tmNextPeriodicThink;
