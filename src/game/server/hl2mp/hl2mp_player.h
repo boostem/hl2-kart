@@ -72,6 +72,7 @@ public:
 	virtual bool BumpWeapon( CBaseCombatWeapon *pWeapon );
 	virtual void ChangeTeam( int iTeam ) OVERRIDE;
 	virtual void PickupObject ( CBaseEntity *pObject, bool bLimitMassAndSize );
+	virtual void PlayerUse( void );
 	virtual void PlayStepSound( Vector &vecOrigin, surfacedata_t *psurface, float fvol, bool force );
 	virtual void Weapon_Drop( CBaseCombatWeapon *pWeapon, const Vector *pvecTarget = NULL, const Vector *pVelocity = NULL );
 	virtual void UpdateOnRemove( void );
@@ -98,6 +99,12 @@ public:
 	void ResetAnimation( void );
 	void SetPlayerModel( void );
 	void SetPlayerTeamModel( void );
+	void SetKartModel( void );
+
+	// Kart mode: the player entity is the kart. Latched from kart_enabled at spawn.
+	bool IsInKart( void ) const { return m_bKartMode; }
+	float GetKartSpeed( void ) const { return m_flKartSpeed; }
+	float GetKartYaw( void ) const { return m_flKartYaw; }
 	Activity TranslateTeamActivity( Activity ActToTranslate );
 	
 	float GetNextModelChangeTime( void ) { return m_flNextModelChangeTime; }
@@ -152,6 +159,10 @@ private:
 	int m_iModelType;
 	CNetworkVar( int, m_iSpawnInterpCounter );
 	CNetworkVar( int, m_iPlayerSoundType );
+
+	CNetworkVar( bool, m_bKartMode );
+	CNetworkVar( float, m_flKartSpeed );	// forward speed along the kart's yaw, u/s
+	CNetworkVar( float, m_flKartYaw );		// heading of the kart body, degrees
 
 	float m_flNextModelChangeTime;
 	float m_flNextTeamChangeTime;

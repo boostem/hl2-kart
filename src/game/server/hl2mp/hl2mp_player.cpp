@@ -14,6 +14,7 @@
 #include "predicted_viewmodel.h"
 #include "in_buttons.h"
 #include "hl2mp_gamerules.h"
+#include "kart_shareddefs.h"
 #include "KeyValues.h"
 #include "team.h"
 #include "weapon_hl2mpbase.h"
@@ -55,6 +56,10 @@ BEGIN_SEND_TABLE_NOBASE( CHL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 	SendPropFloat( SENDINFO_VECTORELEM(m_angEyeAngles, 0), 8, SPROP_CHANGES_OFTEN, -90.0f, 90.0f ),
 	SendPropAngle( SENDINFO_VECTORELEM(m_angEyeAngles, 1), 10, SPROP_CHANGES_OFTEN ),
 
+	// full-precision kart state for the local player's prediction
+	SendPropFloat( SENDINFO( m_flKartSpeed ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
+	SendPropFloat( SENDINFO( m_flKartYaw ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
+
 END_SEND_TABLE()
 
 // all players except the local player
@@ -65,6 +70,10 @@ BEGIN_SEND_TABLE_NOBASE( CHL2MP_Player, DT_HL2MPNonLocalPlayerExclusive )
 
 	SendPropFloat( SENDINFO_VECTORELEM(m_angEyeAngles, 0), 8, SPROP_CHANGES_OFTEN, -90.0f, 90.0f ),
 	SendPropAngle( SENDINFO_VECTORELEM(m_angEyeAngles, 1), 10, SPROP_CHANGES_OFTEN ),
+
+	// lo-res kart state for other players: enough to draw their kart
+	SendPropFloat( SENDINFO( m_flKartSpeed ), 12, SPROP_CHANGES_OFTEN, KART_NET_SPEED_MIN, KART_NET_SPEED_MAX ),
+	SendPropAngle( SENDINFO( m_flKartYaw ), 13, SPROP_CHANGES_OFTEN ),
 
 END_SEND_TABLE()
 
@@ -90,6 +99,7 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropEHandle( SENDINFO( m_hRagdoll ) ),
 	SendPropInt( SENDINFO( m_iSpawnInterpCounter), 4 ),
 	SendPropInt( SENDINFO( m_iPlayerSoundType), 3 ),
+	SendPropBool( SENDINFO( m_bKartMode ) ),
 	
 	SendPropExclude( "DT_BaseAnimating", "m_flPoseParameter" ),
 	SendPropExclude( "DT_BaseFlex", "m_viewtarget" ),
@@ -151,6 +161,10 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 
 	m_iSpawnInterpCounter = 0;
 
+	m_bKartMode = false;
+	m_flKartSpeed = 0.0f;
+	m_flKartYaw = 0.0f;
+
     m_bEnterObserver = false;
 	m_bReady = false;
 
@@ -193,6 +207,8 @@ void CHL2MP_Player::Precache( void )
 
 	for ( i = 0; i < nHeads; ++i )
 	   	 PrecacheModel( g_ppszRandomCombineModels[i] );
+
+	PrecacheModel( KART_PLACEHOLDER_MODEL );
 
 	PrecacheFootStepSounds();
 
@@ -335,9 +351,28 @@ void CHL2MP_Player::Spawn(void)
 	m_flNextModelChangeTime = 0.0f;
 	m_flNextTeamChangeTime = 0.0f;
 
+	// Latch kart mode for this life, before the team (and so the model) is picked.
+	m_bKartMode = kart_enabled.GetBool();
+
 	PickDefaultSpawnTeam();
 
 	BaseClass::Spawn();
+
+	// A respawn keeps its team and so its model: re-apply the model whenever it
+	// doesn't match the mode we just latched (kart_enabled was toggled, then kill).
+	const char *pszModel = modelinfo->GetModelName( GetModel() );
+	bool bHasKartModel = pszModel && !Q_stricmp( pszModel, KART_PLACEHOLDER_MODEL );
+	if ( IsInKart() != bHasKartModel )
+	{
+		if ( HL2MPRules()->IsTeamplay() )
+		{
+			SetPlayerTeamModel();
+		}
+		else
+		{
+			SetPlayerModel();
+		}
+	}
 	
 	if ( !IsObserver() )
 	{
@@ -346,7 +381,10 @@ void CHL2MP_Player::Spawn(void)
 
 		RemoveEffects( EF_NODRAW );
 		
-		GiveDefaultItems();
+		if ( !IsInKart() )
+		{
+			GiveDefaultItems();
+		}
 	}
 
 	SetNumAnimOverlays( 3 );
@@ -355,6 +393,23 @@ void CHL2MP_Player::Spawn(void)
 	m_nRenderFX = kRenderNormal;
 
 	m_Local.m_iHideHUD = 0;
+
+	if ( IsInKart() )
+	{
+		// The kart is the player: no weapons, no suit, no damage yet (M1), and it is
+		// drawn for the local player too so third person shows the kart.
+		m_flKartSpeed = 0.0f;
+		m_flKartYaw = GetAbsAngles()[YAW];	// spawn point facing
+		m_Local.m_bForceLocalPlayerDraw = true;
+		m_takedamage = DAMAGE_NO;
+		m_Local.m_iHideHUD |= KART_HIDEHUD_BITS;
+		SetCollisionBounds( VEC_HULL_MIN, VEC_HULL_MAX );
+		SetViewOffset( VEC_VIEW );
+	}
+	else
+	{
+		m_Local.m_bForceLocalPlayerDraw = false;
+	}
 	
 	AddFlag(FL_ONGROUND); // set the player on the ground at the start of the round.
 
@@ -414,8 +469,25 @@ void CHL2MP_Player::PickupObject( CBaseEntity* pObject, bool bLimitMassAndSize )
 	return BaseClass::PickupObject( pObject, bLimitMassAndSize );
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: +use does nothing from a kart: no object pickup, no buttons.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::PlayerUse( void )
+{
+	if ( IsInKart() )
+		return;
+
+	BaseClass::PlayerUse();
+}
+
 void CHL2MP_Player::SetPlayerTeamModel( void )
 {
+	if ( IsInKart() )
+	{
+		SetKartModel();
+		return;
+	}
+
 	const char *szModelName = NULL;
 	szModelName = engine->GetClientConVarValue( engine->IndexOfEdict( edict() ), "cl_playermodel" );
 
@@ -465,6 +537,12 @@ void CHL2MP_Player::SetPlayerTeamModel( void )
 
 void CHL2MP_Player::SetPlayerModel( void )
 {
+	if ( IsInKart() )
+	{
+		SetKartModel();
+		return;
+	}
+
 	const char *szModelName = NULL;
 	const char *pszCurrentModelName = modelinfo->GetModelName( GetModel());
 
@@ -555,8 +633,29 @@ void CHL2MP_Player::SetupPlayerSoundsByModel( const char *pModelName )
 	}
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Kart mode replacement for SetPlayerModel()/SetPlayerTeamModel():
+//			the placeholder kart model with the kart hull and no animation.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::SetKartModel( void )
+{
+	SetModel( KART_PLACEHOLDER_MODEL );
+	m_iPlayerSoundType = (int)PLAYER_SOUNDS_CITIZEN;
+	SetCollisionBounds( KART_HULL_MIN, KART_HULL_MAX );
+	ResetSequence( 0 );
+
+	m_flNextModelChangeTime = gpGlobals->curtime + MODEL_CHANGE_INTERVAL;
+}
+
 void CHL2MP_Player::ResetAnimation( void )
 {
+	if ( IsInKart() )
+	{
+		// The kart model has no player animations; keep its first sequence.
+		ResetSequence( 0 );
+		return;
+	}
+
 	if ( IsAlive() )
 	{
 		SetSequence ( -1 );
@@ -619,7 +718,10 @@ void CHL2MP_Player::PostThink( void )
 		SetCollisionBounds( VEC_CROUCH_TRACE_MIN, VEC_CROUCH_TRACE_MAX );
 	}
 
-	m_PlayerAnimState.Update();
+	if ( !IsInKart() )
+	{
+		m_PlayerAnimState.Update();
+	}
 
 	// Store the eye angles pitch so the client can compute its animation state correctly.
 	m_angEyeAngles = EyeAngles();
@@ -738,6 +840,10 @@ extern ConVar hl2_normspeed;
 // Set the activity based on an event or current state
 void CHL2MP_Player::SetAnimation( PLAYER_ANIM playerAnim )
 {
+	// The kart model has none of the player activities.
+	if ( IsInKart() )
+		return;
+
 	int animDesired;
 
 	float speed;
@@ -910,6 +1016,10 @@ extern int	gEvilImpulse101;
 //-----------------------------------------------------------------------------
 bool CHL2MP_Player::BumpWeapon( CBaseCombatWeapon *pWeapon )
 {
+	// Karts carry no weapons.
+	if ( IsInKart() )
+		return false;
+
 	CBaseCombatCharacter *pOwner = pWeapon->GetOwner();
 
 	// Can I have this weapon type?
@@ -1684,6 +1794,11 @@ void CHL2MP_Player::State_Enter_ACTIVE()
 	// RemoveSolidFlags( FSOLID_NOT_SOLID );
 	
 	m_Local.m_iHideHUD = 0;
+
+	if ( IsInKart() )
+	{
+		m_Local.m_iHideHUD |= KART_HIDEHUD_BITS;
+	}
 }
 
 
