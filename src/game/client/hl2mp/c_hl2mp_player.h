@@ -186,6 +186,12 @@ private:
 	CSoundPatch	*m_pKartEngineIdle;
 	CSoundPatch	*m_pKartEngineRev;
 	float	m_flKartSoundLastSpeed;	// |m_flKartSpeed| at the last think, for remote throttle
+
+	// Chase camera (local player only, never predicted or networked).
+	void	CalcKartView( Vector &eyeOrigin, QAngle &eyeAngles, float &fov );
+	float	m_flKartCamYaw;		// lagged camera heading, chasing m_flKartYaw
+	bool	m_bKartCamActive;	// the chase camera ran last frame; otherwise snap m_flKartCamYaw
+	bool	m_bKartCamTooClose;	// a wall pulled the camera into the kart: hide the local model
 };
 
 inline C_HL2MP_Player *ToHL2MPPlayer( CBaseEntity *pEntity )

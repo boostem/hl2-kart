@@ -8,6 +8,7 @@
 "+speed"             	"#Valve_Sprint"
 "+jump"					"#Valve_Jump"
 "+duck"					"#Valve_Duck"
+"+lookback"				"#HL2Kart_LookBack"
 "blank"			"=========================="
 "blank"			"#Valve_Combat_Title"
 "blank"			"=========================="
