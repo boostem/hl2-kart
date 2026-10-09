@@ -1,0 +1,63 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# A newer push to the same pull request (or branch) cancels the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux hl2mp client + server
+    runs-on: ubuntu-latest
+    container: registry.gitlab.steamos.cloud/steamrt/sniper/sdk:latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up ccache
+        shell: bash
+        run: |
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"
+          echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
+          # The game projects use precompiled headers; ccache skips them without this.
+          echo "CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('src/**/*.vpc') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ hashFiles('src/**/*.vpc') }}-
+            ${{ runner.os }}-ccache-
+
+      # Same vpc + ninja steps as src/buildallprojects, restricted to the projects the
+      # hl2mp client and server need. sdk_container's podman re-exec isn't used: the job
+      # already runs inside the sniper SDK image.
+      - name: Build
+        shell: bash
+        working-directory: src
+        run: |
+          set -euo pipefail
+          export PATH="/usr/lib/ccache:$PATH"
+          export VPC_NINJA_BUILD_MODE=release
+          ccache -z > /dev/null
+          if ! devtools/bin/vpc /hl2mp /linux64 /ninja /define:SOURCESDK +game /mksln _vpc_/ninja/ci_hl2mp_release > vpc.log 2>&1; then
+            tail -n 50 vpc.log
+            exit 1
+          fi
+          if ! ninja -f _vpc_/ninja/ci_hl2mp_release.ninja -j"$(nproc)" > ninja.log 2>&1; then
+            echo "::group::Errors"
+            grep -E "error:|FAILED:" ninja.log | head -n 50 || true
+            echo "::endgroup::"
+            tail -n 100 ninja.log
+            exit 1
+          fi
+          tail -n 1 ninja.log
+          ls -l ../game/mod_hl2mp/bin/linux64/client.so ../game/mod_hl2mp/bin/linux64/server.so
+          ccache -s
