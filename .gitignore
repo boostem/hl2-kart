@@ -519,3 +519,7 @@ game/*/cfg/config.cfg
 game/*/screenshots/
 game/*/save/
 game/*/downloadlists/
+
+# Python venv for tools/
+tools/venv/
+__pycache__/
