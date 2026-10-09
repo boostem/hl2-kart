@@ -277,6 +277,7 @@ void CHL2MP_Player::Precache( void )
 	PrecacheModel( KART_SCRAP_MODEL );
 	PrecacheModel( KART_DRIVER_ANIMS );
 	PrecacheModel( KART_PLACEHOLDER_MODEL );
+	UTIL_PrecacheOther( "kart_proj_hubcap" );
 	if ( kart_model.GetString()[0] )
 	{
 		PrecacheModel( kart_model.GetString() );
