@@ -748,16 +748,19 @@
 	// positions so far; each element adds its own keys when it lands.
 	// "r" is from the right/bottom edge and "c" from the center.
 
-	// Held item, top center
+	// Held item, top center (CKartItemSlot, hl2mp/kart_hud_item.cpp): a
+	// box_size square box, the use hint under it.
 	KartItemSlot
 	{
 		"fieldName"		"KartItemSlot"
-		"xpos"			"c-32"
+		"xpos"			"c-48"
 		"ypos"			"12"
-		"wide"			"64"
-		"tall"			"64"
+		"wide"			"96"
+		"tall"			"92"
 		"visible"		"1"
 		"enabled"		"1"
+		"box_size"		"72"
+		"icon_inset"	"8"
 	}
 
 	// Lap, top left (CKartLapCounter, hl2mp/kart_hud_race.cpp)

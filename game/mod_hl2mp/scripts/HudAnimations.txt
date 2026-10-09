@@ -870,3 +870,10 @@ event KartPositionPulse
 	Animate KartPosition	TextColor	"KartWhite"	Deaccel	0.05	0.6
 	Animate KartPosition	Blur		"0"			Deaccel	0.05	0.6
 }
+
+// The item roulette landed (CKartItemSlot)
+event KartItemSettle
+{
+	Animate KartItemSlot	Flash		"1"			Linear	0.0		0.0
+	Animate KartItemSlot	Flash		"0"			Deaccel	0.0		0.5
+}
