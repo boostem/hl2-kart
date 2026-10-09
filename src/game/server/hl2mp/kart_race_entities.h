@@ -10,6 +10,7 @@
 //			kart_path_node		the bots' racing line (kart_racing_line.h).
 //			kart_respawn_zone	brush trigger, a kill plane: karts entering it are
 //								put back at their last checkpoint.
+//			kart_boost_pad		brush trigger, gives karts entering it a boost.
 //
 //			A map without them is free drive: karts spawn on the deathmatch spawns
 //			and nothing is timed.
@@ -78,6 +79,40 @@ class CKartRespawnZone : public CBaseTrigger
 public:
 	virtual void Spawn( void );
 	virtual void StartTouch( CBaseEntity *pOther );
+};
+
+//-----------------------------------------------------------------------------
+// kart_boost_pad: brush trigger on the road. A kart entering it gets a boost
+// (KartGiveBoost) and the pad fires OnBoost. Each kart then waits "cooldown"
+// seconds before the same pad boosts it again, and only entering the pad
+// counts, so a kart sitting on it is not boosted again.
+//
+// Server only: the boost reaches the driver's prediction through the
+// networked boost fields, so the local kart sees one small correction when
+// it arrives.
+//-----------------------------------------------------------------------------
+class CKartBoostPad : public CBaseTrigger
+{
+	DECLARE_CLASS( CKartBoostPad, CBaseTrigger );
+	DECLARE_DATADESC();
+
+public:
+	CKartBoostPad();
+
+	virtual void Precache( void );
+	virtual void Spawn( void );
+	virtual void StartTouch( CBaseEntity *pOther );
+
+private:
+	float m_flBoostDuration;
+	float m_flBoostScale;
+	float m_flCooldown;
+
+	// Per player slot: the time this pad may boost that kart again.
+	float m_flNextBoostTime[ MAX_PLAYERS + 1 ];
+
+	// Fired on each boost; the activator is the kart.
+	COutputEvent m_OnBoost;
 };
 
 //-----------------------------------------------------------------------------
