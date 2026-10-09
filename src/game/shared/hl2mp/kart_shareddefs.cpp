@@ -49,6 +49,18 @@ ConVar kart_drift_turn_min( "kart_drift_turn_min", "40", KART_TUNING_FLAGS, "Dri
 ConVar kart_drift_turn_max( "kart_drift_turn_max", "160", KART_TUNING_FLAGS, "Drift turn rate while steering into the drift (tightest line), in degrees per second." );
 ConVar kart_drift_slip_rate( "kart_drift_slip_rate", "90", KART_TUNING_FLAGS, "How fast the slip angle builds up in a drift and straightens out after it, in degrees per second." );
 
+// Mini-turbo and boost
+ConVar kart_turbo_charge_min( "kart_turbo_charge_min", "0.75", KART_TUNING_FLAGS, "Mini-turbo charge per second of drifting while steering against the drift." );
+ConVar kart_turbo_charge_max( "kart_turbo_charge_max", "1.25", KART_TUNING_FLAGS, "Mini-turbo charge per second of drifting while steering into the drift (halfway between with no steer)." );
+ConVar kart_turbo_tier1_time( "kart_turbo_tier1_time", "0.6", KART_TUNING_FLAGS, "Drift charge for a tier 1 mini-turbo." );
+ConVar kart_turbo_tier2_time( "kart_turbo_tier2_time", "1.4", KART_TUNING_FLAGS, "Drift charge for a tier 2 mini-turbo." );
+ConVar kart_turbo_tier3_time( "kart_turbo_tier3_time", "2.4", KART_TUNING_FLAGS, "Drift charge for a tier 3 mini-turbo." );
+ConVar kart_turbo_tier1_duration( "kart_turbo_tier1_duration", "0.6", KART_TUNING_FLAGS, "Seconds of boost from releasing a drift at tier 1." );
+ConVar kart_turbo_tier2_duration( "kart_turbo_tier2_duration", "1.0", KART_TUNING_FLAGS, "Seconds of boost from releasing a drift at tier 2." );
+ConVar kart_turbo_tier3_duration( "kart_turbo_tier3_duration", "1.6", KART_TUNING_FLAGS, "Seconds of boost from releasing a drift at tier 3." );
+ConVar kart_boost_scale( "kart_boost_scale", "1.3", KART_TUNING_FLAGS, "Speed of a drift mini-turbo boost, as a multiple of kart_max_speed." );
+ConVar kart_boost_decay( "kart_boost_decay", "400", KART_TUNING_FLAGS, "How fast a kart above kart_max_speed (after a boost) slows back down to it, in units per second squared." );
+
 const color32 g_KartColors[KART_COLOR_COUNT] =
 {
 	{ 230,  60,  60, 255 },	// red

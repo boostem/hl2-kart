@@ -125,6 +125,38 @@ void CHL2MP_Player::PlayStepSound( Vector &vecOrigin, surfacedata_t *psurface, f
 	EmitSound( filter, entindex(), ep );
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Kart boost for flDuration seconds: the kart's speed is at least
+//			kart_max_speed * flSpeedScale until it ends, then decays back to top
+//			speed at kart_boost_decay (see CKartGameMovement).
+//
+//			Shared: the kart movement calls it in client prediction and on the
+//			server (drift mini-turbos); server-only callers (boost pads, items)
+//			just network the result. Uses gpGlobals->curtime, which is the
+//			predicted tick's time in prediction.
+//
+//			Stacking: a boost given while boosting adds its duration to what is
+//			left and keeps the higher of the two scales.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::KartGiveBoost( float flDuration, float flSpeedScale )
+{
+	if ( flDuration <= 0.0f )
+		return;
+
+	if ( IsKartBoosting() )
+	{
+		float flEndTime = m_flKartBoostEndTime;
+		float flScale = m_flKartBoostScale;
+		m_flKartBoostEndTime = flEndTime + flDuration;
+		m_flKartBoostScale = MAX( flScale, flSpeedScale );
+	}
+	else
+	{
+		m_flKartBoostEndTime = gpGlobals->curtime + flDuration;
+		m_flKartBoostScale = flSpeedScale;
+	}
+}
+
 
 //==========================
 // ANIMATION CODE

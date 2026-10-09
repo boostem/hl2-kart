@@ -59,6 +59,12 @@ protected:
 	// moves the slip angle toward the drift's.
 	void			KartUpdateHopAndDrift( float flSpeed, float flSteer, bool bJumpHeld, bool bJumpPressed, bool &bOnGround, float flFrametime );
 
+	// Mini-turbo tier (0-3) for a drift charge.
+	static int		KartTurboTier( float flCharge );
+
+	// Gives the boost for releasing a drift at a mini-turbo tier (none for 0).
+	void			KartReleaseTurbo( int nTier );
+
 	// Signed steering rate (degrees per second) for a speed.
 	static float	KartTurnRate( float flSpeed, bool bOnGround );
 

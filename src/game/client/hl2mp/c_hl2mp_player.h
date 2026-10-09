@@ -128,6 +128,14 @@ public:
 	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
 	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
 	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
+	float GetKartDriftCharge( void ) const { return m_flKartDriftCharge; }
+	int GetKartDriftTier( void ) const { return m_nKartDriftTier; }
+
+	// Kart boost (drift mini-turbos, boost pads, items). Shared, see hl2mp_player_shared.cpp.
+	bool IsKartBoosting( void ) const { return gpGlobals->curtime < m_flKartBoostEndTime; }
+	float GetKartBoostEndTime( void ) const { return m_flKartBoostEndTime; }
+	float GetKartBoostScale( void ) const { return m_flKartBoostScale; }
+	void KartGiveBoost( float flDuration, float flSpeedScale );
 
 	// Kart race state (see kart_race_shared.h), networked for every player.
 	int GetKartLap( void ) const { return m_nKartLap; }
@@ -208,6 +216,10 @@ private:
 	float	m_flKartSlipAngle;	// heading minus velocity yaw, degrees
 	float	m_flKartDriftTime;	// seconds into the current drift
 	float	m_flKartHopTime;	// seconds airborne since a hop, 0 when not hopping
+	float	m_flKartDriftCharge;	// mini-turbo charge of the current drift, 0 when not drifting
+	int		m_nKartDriftTier;	// mini-turbo tier the charge has reached, 0-3
+	float	m_flKartBoostEndTime;	// time the current boost ends, in the past when not boosting
+	float	m_flKartBoostScale;	// kart_max_speed multiplier of the current boost
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
 
 	// Kart race state, from the server's race manager.

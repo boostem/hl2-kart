@@ -53,6 +53,16 @@ extern ConVar kart_drift_slip_angle;
 extern ConVar kart_drift_turn_min;
 extern ConVar kart_drift_turn_max;
 extern ConVar kart_drift_slip_rate;
+extern ConVar kart_turbo_charge_min;
+extern ConVar kart_turbo_charge_max;
+extern ConVar kart_turbo_tier1_time;
+extern ConVar kart_turbo_tier2_time;
+extern ConVar kart_turbo_tier3_time;
+extern ConVar kart_turbo_tier1_duration;
+extern ConVar kart_turbo_tier2_duration;
+extern ConVar kart_turbo_tier3_duration;
+extern ConVar kart_boost_scale;
+extern ConVar kart_boost_decay;
 
 // Below this speed (units per second, either way) the kart counts as stopped:
 // holding the brake there starts the reverse delay.
