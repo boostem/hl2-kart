@@ -139,6 +139,7 @@ public:
 	float GetKartBestLap( void ) const { return m_flKartBestLap; }
 	float GetKartTotalTime( void ) const { return m_flKartTotalTime; }
 	bool IsKartLateJoin( void ) const { return m_bKartLateJoin; }
+	bool IsKartWrongWay( void ) const { return m_bKartWrongWay; }
 
 	// Kart item (see kart_items.h), networked for every player.
 	int GetKartItem( void ) const { return m_nKartItem; }
@@ -221,6 +222,7 @@ private:
 	float	m_flKartBestLap;
 	float	m_flKartTotalTime;
 	bool	m_bKartLateJoin;
+	bool	m_bKartWrongWay;
 
 	// Kart item, from the server.
 	int		m_nKartItem;

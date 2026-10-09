@@ -8,6 +8,8 @@
 //			kart_checkpoint		brush trigger, "index" 1..N in track order.
 //			kart_finish			brush trigger, the start/finish line (checkpoint 0).
 //			kart_path_node		the bots' racing line (kart_racing_line.h).
+//			kart_respawn_zone	brush trigger, a kill plane: karts entering it are
+//								put back at their last checkpoint.
 //
 //			A map without them is free drive: karts spawn on the deathmatch spawns
 //			and nothing is timed.
@@ -43,8 +45,15 @@ public:
 
 	int GetIndex( void ) const { return m_iIndex; }
 
+	// The entity named by "respawn_target", where karts that hit this
+	// checkpoint last are put back on the track; NULL when unset or missing.
+	CBaseEntity *GetRespawnTarget( void );
+	bool HasRespawnTargetName( void ) const { return m_iszRespawnTarget != NULL_STRING && STRING( m_iszRespawnTarget )[0] != '\0'; }
+	const char *GetRespawnTargetName( void ) const { return STRING( m_iszRespawnTarget ); }
+
 protected:
 	int m_iIndex;
+	string_t m_iszRespawnTarget;
 };
 
 //-----------------------------------------------------------------------------
@@ -56,6 +65,19 @@ class CKartFinish : public CKartCheckpoint
 
 public:
 	virtual void Spawn( void );
+};
+
+//-----------------------------------------------------------------------------
+// kart_respawn_zone: brush trigger under or beside the track. A kart entering
+// it is put back on the track at its last checkpoint.
+//-----------------------------------------------------------------------------
+class CKartRespawnZone : public CBaseTrigger
+{
+	DECLARE_CLASS( CKartRespawnZone, CBaseTrigger );
+
+public:
+	virtual void Spawn( void );
+	virtual void StartTouch( CBaseEntity *pOther );
 };
 
 //-----------------------------------------------------------------------------
@@ -126,6 +148,16 @@ public:
 	// A kart player entered checkpoint 'index' (KART_FINISH_INDEX for the line).
 	void OnKartTouchedCheckpoint( CHL2MP_Player *pPlayer, int index );
 
+	// Where a kart is put back on the track: the last checkpoint it hit (the
+	// one before its next), at that checkpoint's respawn_target when set, else
+	// on the ground under the trigger's center, facing the next checkpoint.
+	// False when the map has no route.
+	bool GetRespawnPoint( CHL2MP_Player *pPlayer, Vector &vecOrigin, QAngle &angFacing ) const;
+
+	// Karts below this height are put back on the track ("kill_z" keyvalue).
+	bool HasKillZ( void ) const { return m_bHasKillZ; }
+	float GetKillZ( void ) const { return m_flKillZ; }
+
 	// Puts every player back to the start of the race (kart_race_reset).
 	void ResetRace( void );
 
@@ -156,11 +188,16 @@ private:
 	int NextRouteIndex( int index ) const;
 
 	void UpdateProgress( CHL2MP_Player *pPlayer );
+	void UpdateWrongWay( CHL2MP_Player *pPlayer, int iSegment );
+	void CheckKillZ( void );
 	void UpdatePositions( void );
 	void FinishRace( CHL2MP_Player *pPlayer, bool bDNF );
 
 	int m_iLaps;
 	string_t m_iszTrackName;
+	string_t m_iszKillZ;	// "kill_z" as typed: empty for none
+	bool m_bHasKillZ;
+	float m_flKillZ;
 	CUtlVector< CHandle< CKartCheckpoint > > m_Checkpoints;
 
 	// The track as a loop of checkpoint centers: route position 0 is the line,
@@ -169,6 +206,7 @@ private:
 	struct RoutePoint_t
 	{
 		int		index;		// checkpoint index
+		CHandle< CKartCheckpoint > hTrigger;	// its trigger
 		Vector	center;		// world space center of its trigger
 		Vector	dir;		// unit direction of the segment starting here
 		float	length;		// length of the segment starting here
