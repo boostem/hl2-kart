@@ -215,6 +215,11 @@ void CHL2MP_Player::Precache( void )
 	PrecacheScriptSound( "NPC_MetroPolice.Die" );
 	PrecacheScriptSound( "NPC_CombineS.Die" );
 	PrecacheScriptSound( "NPC_Citizen.die" );
+
+	PrecacheScriptSound( "Kart.EngineIdle" );
+	PrecacheScriptSound( "Kart.EngineRev" );
+	PrecacheScriptSound( "Kart.Skid" );
+	PrecacheScriptSound( "Kart.Impact" );
 }
 
 void CHL2MP_Player::GiveAllItems( void )

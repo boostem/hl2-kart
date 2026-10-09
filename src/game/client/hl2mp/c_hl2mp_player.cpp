@@ -15,6 +15,7 @@
 #include "iviewrender_beams.h"			// flashlight beam
 #include "r_efx.h"
 #include "dlight.h"
+#include "soundenvelope.h"
 
 // Don't alias here
 #if defined( CHL2MP_Player )
@@ -26,6 +27,9 @@
 #define MsgPredTest2(...)
 
 ConVar sv_infinite_aux_power( "sv_infinite_aux_power", "0", FCVAR_CHEAT | FCVAR_REPLICATED );
+
+ConVar kart_engine_pitch_min( "kart_engine_pitch_min", "85", FCVAR_ARCHIVE, "Kart engine loop pitch at a standstill (percent)." );
+ConVar kart_engine_pitch_max( "kart_engine_pitch_max", "170", FCVAR_ARCHIVE, "Kart engine loop pitch at kart_max_speed (percent)." );
 
 LINK_ENTITY_TO_CLASS( player, C_HL2MP_Player );
 
@@ -124,6 +128,10 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_flKartYaw = 0.0f;
 	m_angKartRenderAngles.Init();
 
+	m_pKartEngineIdle = NULL;
+	m_pKartEngineRev = NULL;
+	m_flKartSoundLastSpeed = 0.0f;
+
 	AddVar( &m_angEyeAngles, &m_iv_angEyeAngles, LATCH_SIMULATION_VAR );
 
 	m_EntClientFlags |= ENTCLIENTFLAG_DONTUSEIK;
@@ -137,6 +145,7 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 C_HL2MP_Player::~C_HL2MP_Player( void )
 {
 	ReleaseFlashlight();
+	StopKartSounds();
 }
 
 int C_HL2MP_Player::GetIDTarget() const
@@ -335,6 +344,87 @@ void C_HL2MP_Player::ClientThink( void )
 	}
 
 	UpdateIDTarget();
+
+	UpdateKartSounds();
+}
+
+// Top speed the engine pitch is mapped to. kart_max_speed is a replicated
+// movement convar; fall back to its default while it doesn't exist.
+static float KartEngineMaxSpeed( void )
+{
+	static ConVarRef kart_max_speed( "kart_max_speed", true );
+	if ( kart_max_speed.IsValid() && kart_max_speed.GetFloat() > 0.0f )
+		return kart_max_speed.GetFloat();
+
+	return 650.0f;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Engine idle loop pitched by speed, plus a rev loop that fades in
+//			on throttle. Runs for every kart player the client knows about.
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::UpdateKartSounds( void )
+{
+	if ( !IsInKart() || !IsAlive() || IsDormant() )
+	{
+		StopKartSounds();
+		return;
+	}
+
+	CSoundEnvelopeController &controller = CSoundEnvelopeController::GetController();
+
+	float flSpeed = fabs( m_flKartSpeed );
+	float flPitch = RemapValClamped( flSpeed, 0.0f, KartEngineMaxSpeed(), kart_engine_pitch_min.GetFloat(), kart_engine_pitch_max.GetFloat() );
+
+	if ( !m_pKartEngineIdle )
+	{
+		CPASAttenuationFilter filter( this );
+		m_pKartEngineIdle = controller.SoundCreate( filter, entindex(), "Kart.EngineIdle" );
+		controller.Play( m_pKartEngineIdle, 1.0f, flPitch );
+	}
+
+	if ( !m_pKartEngineRev )
+	{
+		CPASAttenuationFilter filter( this );
+		m_pKartEngineRev = controller.SoundCreate( filter, entindex(), "Kart.EngineRev" );
+		controller.Play( m_pKartEngineRev, 0.0f, flPitch );
+	}
+
+	// Throttle: the local player has its buttons; for everyone else, speed going up.
+	bool bThrottle;
+	if ( IsLocalPlayer() )
+	{
+		bThrottle = ( m_nButtons & IN_FORWARD ) != 0;
+	}
+	else
+	{
+		bThrottle = flSpeed > m_flKartSoundLastSpeed + 0.5f;
+	}
+	m_flKartSoundLastSpeed = flSpeed;
+
+	controller.SoundChangePitch( m_pKartEngineIdle, flPitch, 0.1f );
+	controller.SoundChangePitch( m_pKartEngineRev, flPitch, 0.1f );
+	controller.SoundChangeVolume( m_pKartEngineIdle, bThrottle ? 0.6f : 1.0f, 0.25f );
+	controller.SoundChangeVolume( m_pKartEngineRev, bThrottle ? 1.0f : 0.0f, 0.25f );
+}
+
+void C_HL2MP_Player::StopKartSounds( void )
+{
+	CSoundEnvelopeController &controller = CSoundEnvelopeController::GetController();
+
+	if ( m_pKartEngineIdle )
+	{
+		controller.SoundDestroy( m_pKartEngineIdle );
+		m_pKartEngineIdle = NULL;
+	}
+
+	if ( m_pKartEngineRev )
+	{
+		controller.SoundDestroy( m_pKartEngineRev );
+		m_pKartEngineRev = NULL;
+	}
+
+	m_flKartSoundLastSpeed = 0.0f;
 }
 
 //-----------------------------------------------------------------------------
@@ -737,6 +827,8 @@ void C_HL2MP_Player::NotifyShouldTransmit( ShouldTransmitState_t state )
 		{
 			ReleaseFlashlight();
 		}
+
+		StopKartSounds();
 	}
 
 	BaseClass::NotifyShouldTransmit( state );

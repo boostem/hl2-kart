@@ -1,0 +1,46 @@
+// HL2 Kart sounds. HL2's jeep (v8) sound set, Valve content referenced by path.
+
+// Engine loops, created and pitched by speed on the client (C_HL2MP_Player::UpdateKartSounds)
+"Kart.EngineIdle"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_80dB"
+
+	"wave"			"vehicles/v8/v8_idle_loop1.wav"
+}
+
+"Kart.EngineRev"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_80dB"
+
+	"wave"			"vehicles/v8/v8_firstgear_rev_loop1.wav"
+}
+
+"Kart.Skid"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_80dB"
+
+	"wave"			"vehicles/v8/skid_normalfriction.wav"
+}
+
+// Wall bumps
+"Kart.Impact"
+{
+	"channel"		"CHAN_BODY"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_80dB"
+	"pitch"			"95,110"
+
+	"rndwave"
+	{
+		"wave"	"vehicles/v8/vehicle_impact_medium1.wav"
+		"wave"	"vehicles/v8/vehicle_impact_medium2.wav"
+		"wave"	"vehicles/v8/vehicle_impact_medium3.wav"
+		"wave"	"vehicles/v8/vehicle_impact_medium4.wav"
+	}
+}
