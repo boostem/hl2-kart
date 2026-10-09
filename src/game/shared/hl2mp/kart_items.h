@@ -81,6 +81,10 @@ struct KartItemInfo_t
 
 extern const KartItemInfo_t g_KartItems[KART_ITEM_COUNT];
 
+// Projectile items name their entities kart_proj_<item> (kart_proj_hubcap),
+// so kart bots can see them coming whatever the item.
+#define KART_PROJECTILE_CLASSNAMES	"kart_proj_*"
+
 // Game events (modevents.res).
 #define KART_EVENT_ITEM_PICKUP		"kart_item_pickup"	// userid, item
 #define KART_EVENT_ITEM_USE			"kart_item_use"		// userid, item, backward

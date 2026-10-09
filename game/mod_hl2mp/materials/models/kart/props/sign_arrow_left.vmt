@@ -1,0 +1,5 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/kart/props/sign_arrow_left"
+	"$surfaceprop" "wood_panel"
+}

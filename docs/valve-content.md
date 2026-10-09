@@ -117,6 +117,7 @@ Materials are `.vmt` in `misc`, textures `.vtf` in `tex`; shown here without ext
 - **Decals** (`decals/`): `decal_skidmark01`, `decal_skidmark02`, `decaltiremark001a`.
 - **Hazard / caution**: `props/hazardstrip001a`, `props/signcaution002a`, `props/signcaution002b`, `props/signwarning001b`, `props/signwarning001c`,
   `decals/decalsigncaution001b`, `decals/decalsigncaution001c`.
+- **Boost pad markings**: `dev/dev_hazzardstripe01a`, `effects/com_shield002a`, `effects/com_shield003a`, `effects/com_shield004a`.
 - **Skyboxes** (`skybox/<name>` + `up|dn|lf|rt|ft|bk` faces): `sky_day01_01`, `sky_day01_04`..`sky_day01_09`, `sky_day02_01`..`02_07`, `02_09`,
   `02_10`, `sky_day03_01`..`03_06`, `sky_day03_06b`, `sky_borealis01`, `sky_wasteland02`, `sky_fake_white`. Most have an `_hdr` variant.
 
@@ -148,6 +149,10 @@ All in `snd` (and `mp` for a few). Sounds are used via soundscripts (loose `hl2/
   `Airboat_impact_hard`, `Airboat_impact_soft`, `Airboat_impact_splash`, `Airboat_water_stopped`, `Airboat_water_fast`, `Airboat_headlight_on`, `Airboat_headlight_off`.
 - `apc_engine_idle`, `apc_engine_start`, `apc_engine_stop`, `apc_firstgear`, `apc_firstgear_resume`, `apc_throttleoff_slowspeed`, `apc_throttleoff_fastspeed`,
   `PropAPC.FireCannon`, `PropAPC.FireRocket`.
+
+### Machines (`sound/ambient/machines/`)
+`thumper_hit.wav` (used by `Kart.BoostPad`), `thumper_top.wav`, `thumper_dust.wav`, `thumper_amb.wav`, `thumper_startup1.wav`, `thumper_shutdown1.wav`.
+Also `sound/ambient/energy/zap1..3.wav`, `zap5..9.wav`.
 
 ### Physics impact sets (`sound/physics/<material>/`)
 Counts of files: `body` 18, `cardboard` 27, `concrete` 31, `flesh` 21, `glass` 37, `metal` 118, `nearmiss` 4, `plaster` 26, `plastic` 35, `rubber` 9,

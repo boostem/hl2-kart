@@ -14,6 +14,7 @@ class C_HL2MP_Player;
 #include "hl2mp_player_shared.h"
 #include "kart_shareddefs.h"
 #include "beamdraw.h"
+#include "particles_simple.h"
 
 class CSoundPatch;
 class C_KartDriver;
@@ -151,6 +152,8 @@ public:
 	bool IsKartSpinningOut( void ) const { return m_nKartHitState == KART_HIT_SPINOUT; }
 	bool IsKartHitImmune( void ) const;
 	float GetKartHitSpinYaw( void ) const;
+	// Only kart bots (server side) drive at another top speed; the local kart never does.
+	float GetKartTopSpeedScale( void ) const { return 1.0f; }
 
 	// Kart race state (see kart_race_shared.h), networked for every player.
 	int GetKartLap( void ) const { return m_nKartLap; }
@@ -184,6 +187,11 @@ public:
 	void UpdateKartSkidmarks( void );
 	void ShootKartSkidmark( const char *pszAttachment, float flSide, const Vector &vecDir );
 
+	// Boost flame at the exhaust and mini-turbo sparks at the rear wheels, for every kart player in PVS.
+	void UpdateKartBoostFX( void );
+	void EmitKartExhaust( int nCount );
+	void EmitKartDriftSparks( int nCount );
+
 	// Turns the front wheels and steering wheel bones of karts that have them.
 	void UpdateKartSteering( void );
 	virtual void BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed ) OVERRIDE;
@@ -192,6 +200,7 @@ public:
 	void UpdateKartDriver( void );
 	void RemoveKartDriver( void );
 	float GetKartDriverLean( void ) const { return m_flKartDriverLean; }	// -1 full left .. +1 full right
+	float GetKartDriverLook( void ) const { return m_flKartDriverLook; }	// -1 full left .. +1 full right
 	bool IsKartCamTooClose( void ) const { return m_bKartCamTooClose; }
 
 	virtual void PostThink( void );
@@ -285,11 +294,18 @@ private:
 	float	m_flKartSkidDist;		// units travelled while drifting since the last skidmark
 	bool	m_bKartSkidActive;		// m_vecKartSkidLastPos is valid
 
+	// Boost and drift spark particles (client only). They are short-lived, so
+	// stopping the emission is all it takes to end the effect.
+	CSmartPtr<CSimpleEmitter>	m_pKartFXEmitter;
+	float	m_flKartExhaustAccum;	// exhaust particles owed to the emission rate
+	float	m_flKartSparkAccum;		// drift spark particles owed to the emission rate
+
 	// Chase camera (local player only, never predicted or networked).
 	void	CalcKartView( Vector &eyeOrigin, QAngle &eyeAngles, float &fov );
 	float	m_flKartCamYaw;		// lagged camera heading, chasing m_flKartYaw
 	bool	m_bKartCamActive;	// the chase camera ran last frame; otherwise snap m_flKartCamYaw
 	bool	m_bKartCamTooClose;	// a wall pulled the camera into the kart: hide the local model
+	float	m_flKartCamBoost;	// 0-1, eases the boost FOV kick and pull-back in and out
 
 	// Steering animation (client only): bone indices, -1 when the kart model has no such bone.
 	float	m_flKartSteerAngle;	// see GetKartSteerAngle
@@ -301,6 +317,7 @@ private:
 	int		m_nKartDriverModel;
 	C_KartDriver	*m_pKartDriver;
 	float	m_flKartDriverLean;	// see GetKartDriverLean
+	float	m_flKartDriverLook;	// see GetKartDriverLook
 };
 
 inline C_HL2MP_Player *ToHL2MPPlayer( CBaseEntity *pEntity )

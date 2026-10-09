@@ -23,6 +23,23 @@
 //						toward the line. No progress for kart_bot_reset_time
 //						(driving the wrong way included): back onto the line.
 //
+//			skill		kart_bot_difficulty 0-2 sets the bot's top speed, how
+//						much its aim wanders (steering noise and a wider dead
+//						zone), how many sharp corners it drifts and how quickly
+//						it uses its items.
+//			rubber band	while the race runs, the gap in race progress to the
+//						best human still racing scales the bot's top speed by up
+//						to kart_bot_rubberband: faster behind, slower ahead.
+//			items		empty-handed, it steers a little toward an item box just
+//						ahead. Holding an item, once the roulette has stopped and
+//						its reaction time has passed: hubcap at a kart ahead in
+//						line (backward at one close behind in line), seeker when
+//						a kart is ahead, oil slick when a kart is close behind,
+//						nitro on a straight, buffer when a kart_proj_* projectile
+//						closes in or a kart close behind holds a hubcap or
+//						seeker. Anything held for kart_bot_item_hold_max is
+//						used anyway.
+//
 //			A frozen kart (countdown, results) gets an empty command and its
 //			stuck timers wait. A respawn or teleport (a move too far for one
 //			tick) makes the bot look for itself on the whole line again.
@@ -33,6 +50,9 @@
 #include "kart_bot.h"
 #include "hl2mp_player.h"
 #include "kart_race_entities.h"
+#include "kart_item_box.h"
+#include "kart_items.h"
+#include "hl2mp_gamerules.h"
 #include "kart_shareddefs.h"
 #include "igamesystem.h"
 #include "in_buttons.h"
@@ -40,6 +60,8 @@
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
+
+extern ConVar kart_debug_server;
 
 ConVar kart_bot_quota( "kart_bot_quota", "0", FCVAR_NONE, "Kart bots to keep in the game: bots join or are kicked, one a second, to match. kart_bot_add and kart_bot_kick change it.", true, 0, true, MAX_PLAYERS );
 ConVar kart_bot_lookahead( "kart_bot_lookahead", "384", FCVAR_NONE, "How far ahead along the racing line, in units, a kart bot aims at top speed. Shrinks with speed down to kart_bot_lookahead_min." );
@@ -50,6 +72,11 @@ ConVar kart_bot_drift_distance( "kart_bot_drift_distance", "512", FCVAR_NONE, "H
 ConVar kart_bot_stuck_time( "kart_bot_stuck_time", "2", FCVAR_NONE, "Seconds without progress along the racing line before a kart bot reverses out." );
 ConVar kart_bot_reverse_time( "kart_bot_reverse_time", "1.5", FCVAR_NONE, "Seconds a stuck kart bot holds the brake to back up (kart_reverse_delay of it standing still)." );
 ConVar kart_bot_reset_time( "kart_bot_reset_time", "8", FCVAR_NONE, "Seconds without progress along the racing line before a kart bot is put back on it. 0: never." );
+ConVar kart_bot_difficulty( "kart_bot_difficulty", "1", FCVAR_NOTIFY, "Kart bot skill: 0 easy (slower, wandering aim, no drifting, slow to use items), 1 normal, 2 hard (full speed, clean lines, drifts every sharp corner).", true, 0, true, 2 );
+ConVar kart_bot_rubberband( "kart_bot_rubberband", "0.15", FCVAR_NOTIFY, "How much kart bots' top speed follows their gap to the best human racing: up to this fraction faster behind them, slower ahead. 0: off.", true, 0.0f, true, 1.0f );
+ConVar kart_bot_rubberband_range( "kart_bot_rubberband_range", "2000", FCVAR_NONE, "Gap to the best human, in units along the track, at which kart_bot_rubberband applies in full.", true, 1.0f, false, 0.0f );
+ConVar kart_bot_items( "kart_bot_items", "1", FCVAR_NONE, "Kart bots steer toward item boxes and use their items." );
+ConVar kart_bot_item_hold_max( "kart_bot_item_hold_max", "15", FCVAR_NONE, "Seconds a kart bot holds an item with no reason to use it before using it anyway. 0: never." );
 ConVar kart_bot_debug( "kart_bot_debug", "0", FCVAR_NONE, "1: draw each kart bot's aim point, the racing line it plans along and what it is doing." );
 
 // forwardmove and sidemove of a held key (cl_forwardspeed); the kart only reads their sign.
@@ -89,7 +116,57 @@ ConVar kart_bot_debug( "kart_bot_debug", "0", FCVAR_NONE, "1: draw each kart bot
 #define KART_BOT_DRIFT_EXIT_ANGLE	10.0f
 #define KART_BOT_DRIFT_COOLDOWN		0.5f
 
+// Steering noise: the aim wanders toward a new random offset this often.
+#define KART_BOT_NOISE_MIN_TIME		0.4f
+#define KART_BOT_NOISE_MAX_TIME		1.2f
+#define KART_BOT_NOISE_RATE			20.0f	// degrees per second the offset moves
+
+// Item boxes: steer toward one this close and this far off the aim point, by
+// this much of the way, until this close to it.
+#define KART_BOT_BOX_RANGE			768.0f
+#define KART_BOT_BOX_ANGLE			25.0f
+#define KART_BOT_BOX_PULL			0.6f
+#define KART_BOT_BOX_MIN_DIST		64.0f
+#define KART_BOT_BOX_LIST_INTERVAL	1.0f
+
+// Item rules: forward throws at a kart this far ahead and this many degrees
+// off the nose; backward ones and the oil slick at a kart this close behind;
+// nitro where the line turns less than this ahead; the buffer against a
+// projectile or an armed kart this close. Wait this long between two uses of
+// a multi-use item.
+#define KART_BOT_THROW_RANGE		1400.0f
+#define KART_BOT_THROW_ANGLE		10.0f
+#define KART_BOT_SEEKER_RANGE		3000.0f
+#define KART_BOT_BEHIND_RANGE		600.0f
+#define KART_BOT_BEHIND_ANGLE		12.0f
+#define KART_BOT_OIL_ANGLE			40.0f
+#define KART_BOT_NITRO_TURN			15.0f
+#define KART_BOT_THREAT_RANGE		800.0f
+#define KART_BOT_ITEM_REUSE			0.5f
+
 #define KART_BOT_DEBUG_INTERVAL		0.1f
+
+// What kart_bot_difficulty changes.
+struct KartBotSkill_t
+{
+	float flTopSpeed;		// kart_max_speed multiplier, before rubber-banding
+	float flSteerNoise;		// degrees the aim wanders either way
+	float flDeadzoneScale;	// times kart_bot_steer_deadzone
+	float flDriftChance;	// of drifting a sharp corner
+	float flItemDelay;		// seconds of reaction before using an item
+};
+
+static const KartBotSkill_t s_KartBotSkills[] =
+{
+	{ 0.85f,	10.0f,	2.0f,	0.0f,	1.5f },	// 0 easy
+	{ 0.93f,	4.0f,	1.4f,	0.5f,	0.8f },	// 1 normal
+	{ 1.0f,		0.0f,	1.0f,	1.0f,	0.3f },	// 2 hard
+};
+
+static const KartBotSkill_t &KartBot_GetSkill( void )
+{
+	return s_KartBotSkills[clamp( kart_bot_difficulty.GetInt(), 0, (int)ARRAYSIZE( s_KartBotSkills ) - 1 )];
+}
 
 static const char *s_pszKartBotNames[] =
 {
@@ -291,14 +368,15 @@ static int KartBot_SteerToward( float flError, int nLastSteer, float flDeadzone 
 	return 0;
 }
 
-// Fastest speed at which the steering (or a drift) can follow a line turning
-// flCurve degrees per unit.
-static float KartBot_CornerSpeed( float flCurve, bool bDrift, float flMaxSpeed )
+// Fastest speed, up to flTopSpeed, at which the steering (or a drift) can
+// follow a line turning flCurve degrees per unit. The steering rate follows
+// the speed as a fraction of kart_max_speed (flMaxSpeed).
+static float KartBot_CornerSpeed( float flCurve, bool bDrift, float flMaxSpeed, float flTopSpeed )
 {
 	if ( flCurve <= 0.0001f )
-		return flMaxSpeed;
+		return flTopSpeed;
 
-	for ( float flSpeed = flMaxSpeed; flSpeed > KART_BOT_MIN_SPEED; flSpeed -= 25.0f )
+	for ( float flSpeed = flTopSpeed; flSpeed > KART_BOT_MIN_SPEED; flSpeed -= 25.0f )
 	{
 		float flRate = bDrift ? kart_drift_turn_max.GetFloat()
 			: RemapValClamped( flSpeed / flMaxSpeed, 0.0f, 1.0f, kart_turn_rate_low.GetFloat(), kart_turn_rate_high.GetFloat() );
@@ -334,6 +412,21 @@ struct KartBotState_t
 	int		nDrift;				// steer sign of the corner being drifted, 0 when not
 	float	flDriftStart;		// when it hopped into the drift
 	float	flNextDrift;		// no new drift before then
+	int		nDriftChoice;		// for the sharp corner ahead: 1 drift it, -1 don't, 0 not decided
+
+	// Skill.
+	float	flNoise;			// degrees the aim is off, positive left
+	float	flNoiseTarget;		// what it wanders toward
+	float	flNextNoise;		// when it picks a new one
+	float	flTopSpeedScale;	// last top speed scale, for the debug text
+
+	// Items.
+	int		nLastItem;			// held item and count last tick, to see a new one
+	int		nLastItemCount;
+	float	flItemHeldSince;
+	float	flItemReadyTime;	// no use before then
+	bool	bItemPressed;		// pressed use last tick: release it first
+	const char *pszItemIntent;	// why it used its item last, for the debug text
 
 	float	flNextDebugDraw;
 
@@ -347,6 +440,17 @@ struct KartBotState_t
 		nDrift = 0;
 		flDriftStart = 0.0f;
 		flNextDrift = 0.0f;
+		nDriftChoice = 0;
+		flNoise = 0.0f;
+		flNoiseTarget = 0.0f;
+		flNextNoise = 0.0f;
+		flTopSpeedScale = 1.0f;
+		nLastItem = KART_ITEM_NONE;
+		nLastItemCount = 0;
+		flItemHeldSince = 0.0f;
+		flItemReadyTime = 0.0f;
+		bItemPressed = false;
+		pszItemIntent = "";
 		flNextDebugDraw = 0.0f;
 		ResetProgress();
 	}
@@ -374,12 +478,18 @@ public:
 	{
 		m_flNextQuotaCheck = 0.0f;
 		m_bWarnedNoLine = false;
+		m_flNextBoxList = 0.0f;
+		m_bBestHuman = false;
+		m_flBestHumanProgress = 0.0f;
 	}
 
 	virtual void LevelInitPostEntity( void )
 	{
 		m_flNextQuotaCheck = 0.0f;
 		m_bWarnedNoLine = false;
+		m_flNextBoxList = 0.0f;
+		m_Boxes.RemoveAll();
+		m_Projectiles.RemoveAll();
 		for ( int i = 0; i < ARRAYSIZE( m_Bots ); i++ )
 		{
 			m_Bots[i].Reset( NULL );
@@ -396,6 +506,11 @@ public:
 			m_flNextQuotaCheck = gpGlobals->curtime + 1.0f;
 			UpdateQuota();
 		}
+
+		if ( KartBot_Count() == 0 )
+			return;
+
+		UpdateWorld();
 
 		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 		{
@@ -438,11 +553,57 @@ private:
 		}
 	}
 
+	// What every bot looks at this tick: the best human's progress, item
+	// boxes (listed once a second) and projectiles in flight.
+	void UpdateWorld( void )
+	{
+		m_bBestHuman = false;
+		m_flBestHumanProgress = 0.0f;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+			if ( !pPlayer || pPlayer->IsFakeClient() || !pPlayer->IsAlive() || pPlayer->IsKartFinished() || !CKartRaceManager::IsRacing( pPlayer ) )
+				continue;
+
+			if ( !m_bBestHuman || pPlayer->GetKartProgress() > m_flBestHumanProgress )
+			{
+				m_bBestHuman = true;
+				m_flBestHumanProgress = pPlayer->GetKartProgress();
+			}
+		}
+
+		if ( gpGlobals->curtime >= m_flNextBoxList )
+		{
+			m_flNextBoxList = gpGlobals->curtime + KART_BOT_BOX_LIST_INTERVAL;
+			m_Boxes.RemoveAll();
+			for ( CBaseEntity *pEnt = gEntList.FindEntityByClassname( NULL, "kart_item_box" ); pEnt; pEnt = gEntList.FindEntityByClassname( pEnt, "kart_item_box" ) )
+			{
+				m_Boxes.AddToTail( static_cast< CKartItemBox * >( pEnt ) );
+			}
+		}
+
+		m_Projectiles.RemoveAll();
+		for ( CBaseEntity *pEnt = gEntList.FindEntityByClassname( NULL, KART_PROJECTILE_CLASSNAMES ); pEnt; pEnt = gEntList.FindEntityByClassname( pEnt, KART_PROJECTILE_CLASSNAMES ) )
+		{
+			m_Projectiles.AddToTail( pEnt );
+		}
+	}
+
 	void BuildCommand( CHL2MP_Player *pBot, KartBotState_t &st, CUserCmd &cmd );
+	float GetTopSpeedScale( CHL2MP_Player *pBot, const KartBotSkill_t &skill, float flLineLength ) const;
+	bool SteerTowardBox( CHL2MP_Player *pBot, float flTravelYaw, float &flError ) const;
+	void UseItem( CHL2MP_Player *pBot, KartBotState_t &st, const KartBotSkill_t &skill, float flTravelYaw, float flTurn, float flError,
+		bool bReversing, CUserCmd &cmd );
 
 	KartBotState_t m_Bots[MAX_PLAYERS + 1];	// by entity index
 	float m_flNextQuotaCheck;
 	bool m_bWarnedNoLine;
+
+	bool m_bBestHuman;				// a human is racing
+	float m_flBestHumanProgress;	// the furthest one's GetKartProgress, in laps
+	float m_flNextBoxList;
+	CUtlVector< CHandle< CKartItemBox > > m_Boxes;
+	CUtlVector< EHANDLE > m_Projectiles;
 };
 
 static CKartBotSystem g_KartBotSystem;
@@ -545,9 +706,15 @@ void CKartBotSystem::BuildCommand( CHL2MP_Player *pBot, KartBotState_t &st, CUse
 		st.flStuckSince = flNow;	// no free spot: try again later
 	}
 
+	// Top speed: the difficulty's, rubber-banded.
+	const KartBotSkill_t &skill = KartBot_GetSkill();
+	st.flTopSpeedScale = GetTopSpeedScale( pBot, skill, flLength );
+	pBot->SetKartTopSpeedScale( st.flTopSpeedScale );
+
 	const float flMaxSpeed = MAX( kart_max_speed.GetFloat(), 1.0f );
+	const float flTopSpeed = flMaxSpeed * st.flTopSpeedScale;
 	const float flSpeed = pBot->GetKartSpeed();
-	const float flDeadzone = kart_bot_steer_deadzone.GetFloat();
+	const float flDeadzone = kart_bot_steer_deadzone.GetFloat() * skill.flDeadzoneScale;
 
 	// Pure pursuit: the aim point ahead on the line, and how far it is off the
 	// direction the kart travels (its heading less the drift's slip).
@@ -556,6 +723,22 @@ void CKartBotSystem::BuildCommand( CHL2MP_Player *pBot, KartBotState_t &st, CUse
 	line.GetPoint( st.flDistance + flLookahead, aim );
 	float flTravelYaw = pBot->GetKartYaw() - pBot->GetKartSlipAngle();
 	float flError = AngleDiff( UTIL_VecToYaw( aim.pos - vecOrigin ), flTravelYaw );	// positive: to the left
+
+	// Steering noise: the aim wanders slowly, more at lower difficulty.
+	if ( flNow >= st.flNextNoise )
+	{
+		st.flNextNoise = flNow + RandomFloat( KART_BOT_NOISE_MIN_TIME, KART_BOT_NOISE_MAX_TIME );
+		st.flNoiseTarget = RandomFloat( -skill.flSteerNoise, skill.flSteerNoise );
+	}
+	st.flNoise = Approach( st.flNoiseTarget, st.flNoise, KART_BOT_NOISE_RATE * gpGlobals->frametime );
+	flError += st.flNoise;
+
+	// Empty-handed: lean toward an item box just ahead.
+	bool bBoxSteer = false;
+	if ( st.nDrift == 0 && kart_bot_items.GetBool() && kart_items_enabled.GetBool() && pBot->GetKartItem() == KART_ITEM_NONE )
+	{
+		bBoxSteer = SteerTowardBox( pBot, flTravelYaw, flError );
+	}
 
 	// The line ahead: how far it turns within the drift distance and just
 	// ahead (the drift exit), its sharpest stretch and lowest speed scale
@@ -607,7 +790,18 @@ void CKartBotSystem::BuildCommand( CHL2MP_Player *pBot, KartBotState_t &st, CUse
 
 	const float flDriftMinSpeed = kart_drift_min_speed.GetFloat();
 	const float flDriftAngle = kart_bot_drift_angle.GetFloat() * ( bDriftHint ? 0.5f : 1.0f );
-	const bool bDriftCorner = fabs( flTurn ) >= flDriftAngle;
+	const bool bSharpCorner = fabs( flTurn ) >= flDriftAngle;
+
+	// Whether to drift this corner, decided once as it comes up.
+	if ( !bSharpCorner )
+	{
+		st.nDriftChoice = 0;
+	}
+	else if ( st.nDriftChoice == 0 )
+	{
+		st.nDriftChoice = ( RandomFloat( 0.0f, 1.0f ) < skill.flDriftChance ) ? 1 : -1;
+	}
+	const bool bDriftCorner = bSharpCorner && st.nDriftChoice > 0;
 	const int nCornerSteer = ( flTurn > 0.0f ) ? -1 : 1;	// the steer sign that follows it
 	const int nKartDrift = pBot->GetKartDriftDir();
 
@@ -667,7 +861,7 @@ void CKartBotSystem::BuildCommand( CHL2MP_Player *pBot, KartBotState_t &st, CUse
 	}
 
 	// Target speed.
-	float flTarget = MIN( flMaxSpeed * flSpeedScale, KartBot_CornerSpeed( flCurve, bDriftCorner || st.nDrift != 0, flMaxSpeed ) );
+	float flTarget = MIN( flTopSpeed * flSpeedScale, KartBot_CornerSpeed( flCurve, bDriftCorner || st.nDrift != 0, flMaxSpeed, flTopSpeed ) );
 	if ( st.nDrift == 0 && fabs( flError ) > KART_BOT_WIDE_ERROR )
 	{
 		flTarget = MIN( flTarget, 0.5f * flMaxSpeed );
@@ -720,6 +914,8 @@ void CKartBotSystem::BuildCommand( CHL2MP_Player *pBot, KartBotState_t &st, CUse
 	cmd.forwardmove = nThrottle * KART_BOT_INPUT;
 	cmd.sidemove = nSteer * KART_BOT_INPUT;
 
+	UseItem( pBot, st, skill, flTravelYaw, flTurn, flError, bReversing, cmd );
+
 	if ( kart_bot_debug.GetBool() && flNow >= st.flNextDebugDraw )
 	{
 		st.flNextDebugDraw = flNow + KART_BOT_DEBUG_INTERVAL;
@@ -756,11 +952,249 @@ void CKartBotSystem::BuildCommand( CHL2MP_Player *pBot, KartBotState_t &st, CUse
 			st.nDrift ? ( st.nDrift > 0 ? "  drift R" : "  drift L" ) : "", bReversing ? "  REVERSE" : "" );
 		NDebugOverlay::Text( vecOrigin + Vector( 0, 0, KART_HULL_MAX.z + 48.0f ), szText, false, flDuration );
 
+		Q_snprintf( szText, sizeof( szText ), "skill %d  top x%.2f  noise %+.0f  item %s%s  %s", kart_bot_difficulty.GetInt(), st.flTopSpeedScale, st.flNoise,
+			KartItem_GetName( pBot->GetKartItem() ), bBoxSteer ? "  -> box" : "", st.pszItemIntent );
+		NDebugOverlay::Text( vecOrigin + Vector( 0, 0, KART_HULL_MAX.z + 32.0f ), szText, false, flDuration );
+
 		if ( flNow - st.flProgressTime > 0.5f )
 		{
 			Q_snprintf( szText, sizeof( szText ), "no progress %.1f s", flNow - st.flStuckSince );
 			NDebugOverlay::Text( vecOrigin + Vector( 0, 0, KART_HULL_MAX.z + 64.0f ), szText, false, flDuration );
 		}
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The bot's top speed, as a kart_max_speed multiplier: the
+//			difficulty's, then rubber-banded by its gap in race progress to the
+//			best human still racing.
+//-----------------------------------------------------------------------------
+float CKartBotSystem::GetTopSpeedScale( CHL2MP_Player *pBot, const KartBotSkill_t &skill, float flLineLength ) const
+{
+	float flScale = skill.flTopSpeed;
+
+	float flRubberband = kart_bot_rubberband.GetFloat();
+	if ( flRubberband > 0.0f && m_bBestHuman && !pBot->IsKartFinished() && HL2MPRules() && HL2MPRules()->IsKartRaceRunning() )
+	{
+		// Progress is in laps; positive gap: the human is ahead.
+		float flGap = ( m_flBestHumanProgress - pBot->GetKartProgress() ) * flLineLength;
+		flScale *= 1.0f + flRubberband * clamp( flGap / kart_bot_rubberband_range.GetFloat(), -1.0f, 1.0f );
+	}
+
+	return flScale;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Bends flError (degrees, positive left) part of the way toward the
+//			nearest available item box ahead, when one is close and near the
+//			aim point. True when it did.
+//-----------------------------------------------------------------------------
+bool CKartBotSystem::SteerTowardBox( CHL2MP_Player *pBot, float flTravelYaw, float &flError ) const
+{
+	const Vector vecOrigin = pBot->GetAbsOrigin();
+
+	float flBestDist = KART_BOT_BOX_RANGE;
+	float flBoxError = 0.0f;
+	bool bFound = false;
+	for ( int i = 0; i < m_Boxes.Count(); i++ )
+	{
+		CKartItemBox *pBox = m_Boxes[i];
+		if ( !pBox || !pBox->IsAvailable() )
+			continue;
+
+		Vector vecTo = pBox->GetAbsOrigin() - vecOrigin;
+		float flDist = vecTo.Length2D();
+		if ( flDist < KART_BOT_BOX_MIN_DIST || flDist >= flBestDist || fabs( vecTo.z ) > 128.0f )
+			continue;
+
+		// Near where it is heading anyway: it only leans off the line a little.
+		float flToBox = AngleDiff( UTIL_VecToYaw( vecTo ), flTravelYaw );
+		if ( fabs( flToBox - flError ) > KART_BOT_BOX_ANGLE )
+			continue;
+
+		flBestDist = flDist;
+		flBoxError = flToBox;
+		bFound = true;
+	}
+
+	if ( bFound )
+	{
+		flError = Lerp( KART_BOT_BOX_PULL, flError, flBoxError );
+	}
+	return bFound;
+}
+
+// The nearest other kart in a cone around flYaw (degrees either way) within
+// flRange, in clear sight. NULL when none.
+static CHL2MP_Player *KartBot_FindKartInCone( CHL2MP_Player *pBot, float flYaw, float flAngle, float flRange )
+{
+	const Vector vecEye = pBot->GetAbsOrigin() + Vector( 0, 0, 24 );
+
+	CHL2MP_Player *pBest = NULL;
+	float flBestDist = flRange;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pOther = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( !pOther || pOther == pBot || !pOther->IsAlive() || !pOther->IsInKart() )
+			continue;
+
+		Vector vecTo = pOther->GetAbsOrigin() - pBot->GetAbsOrigin();
+		float flDist = vecTo.Length2D();
+		if ( flDist >= flBestDist || fabs( AngleDiff( UTIL_VecToYaw( vecTo ), flYaw ) ) > flAngle )
+			continue;
+
+		trace_t tr;
+		UTIL_TraceLine( vecEye, pOther->GetAbsOrigin() + Vector( 0, 0, 24 ), MASK_SOLID_BRUSHONLY, pBot, COLLISION_GROUP_NONE, &tr );
+		if ( tr.fraction < 1.0f )
+			continue;
+
+		pBest = pOther;
+		flBestDist = flDist;
+	}
+	return pBest;
+}
+
+// A kart holding a hubcap or seeker, its roulette stopped.
+static bool KartBot_IsArmed( CHL2MP_Player *pPlayer )
+{
+	int item = pPlayer->GetKartItem();
+	return ( item == KART_ITEM_HUBCAP || item == KART_ITEM_SEEKER ) && !pPlayer->IsKartRouletteSpinning();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Uses the held item when its rule says so: presses attack (forward)
+//			or attack2 (backward) for one tick.
+//-----------------------------------------------------------------------------
+void CKartBotSystem::UseItem( CHL2MP_Player *pBot, KartBotState_t &st, const KartBotSkill_t &skill, float flTravelYaw, float flTurn, float flError,
+	bool bReversing, CUserCmd &cmd )
+{
+	const float flNow = gpGlobals->curtime;
+	const int item = pBot->GetKartItem();
+	const int nCount = pBot->GetKartItemCount();
+
+	// A new item, or one use of it spent: react to it after a while.
+	if ( item != st.nLastItem || nCount != st.nLastItemCount )
+	{
+		if ( item != st.nLastItem )
+		{
+			st.flItemHeldSince = flNow;
+		}
+		float flDelay = skill.flItemDelay * RandomFloat( 0.75f, 1.25f );
+		if ( item == st.nLastItem )
+		{
+			flDelay += KART_BOT_ITEM_REUSE;
+		}
+		st.flItemReadyTime = MAX( pBot->GetKartRouletteEnd(), flNow ) + flDelay;
+		st.nLastItem = item;
+		st.nLastItemCount = nCount;
+	}
+
+	// Let go of the button for a tick after a press, so the next is a new press.
+	if ( st.bItemPressed )
+	{
+		st.bItemPressed = false;
+		return;
+	}
+
+	if ( !kart_bot_items.GetBool() || !kart_items_enabled.GetBool() || !KartItem_IsValid( item ) || bReversing
+		|| pBot->IsKartRouletteSpinning() || flNow < st.flItemReadyTime )
+		return;
+
+	const float flBackYaw = AngleNormalize( flTravelYaw + 180.0f );
+	const float flMaxSpeed = MAX( kart_max_speed.GetFloat(), 1.0f );
+
+	bool bUse = false;
+	bool bBackward = false;
+	const char *pszIntent = "";
+	switch ( item )
+	{
+	case KART_ITEM_HUBCAP:
+		if ( KartBot_FindKartInCone( pBot, flTravelYaw, KART_BOT_THROW_ANGLE, KART_BOT_THROW_RANGE ) )
+		{
+			bUse = true;
+			pszIntent = "hubcap at kart ahead";
+		}
+		else if ( KartBot_FindKartInCone( pBot, flBackYaw, KART_BOT_BEHIND_ANGLE, KART_BOT_BEHIND_RANGE ) )
+		{
+			bUse = bBackward = true;
+			pszIntent = "hubcap at kart behind";
+		}
+		break;
+
+	case KART_ITEM_SEEKER:
+		// It homes on the kart ahead in the race, so any kart ahead will do.
+		if ( pBot->GetKartRacePosition() > 1 || KartBot_FindKartInCone( pBot, flTravelYaw, 60.0f, KART_BOT_SEEKER_RANGE ) )
+		{
+			bUse = true;
+			pszIntent = "seeker, kart ahead";
+		}
+		break;
+
+	case KART_ITEM_OIL_SLICK:
+		if ( KartBot_FindKartInCone( pBot, flBackYaw, KART_BOT_OIL_ANGLE, KART_BOT_BEHIND_RANGE ) )
+		{
+			bUse = bBackward = true;
+			pszIntent = "oil, kart behind";
+		}
+		break;
+
+	case KART_ITEM_NITRO_CAN:
+		if ( fabs( flTurn ) < KART_BOT_NITRO_TURN && fabs( flError ) < KART_BOT_NITRO_TURN && !pBot->IsDrifting() && !pBot->IsKartBoosting()
+			&& pBot->GetGroundEntity() != NULL && pBot->GetKartSpeed() > 0.5f * flMaxSpeed )
+		{
+			bUse = true;
+			pszIntent = "nitro on a straight";
+		}
+		break;
+
+	case KART_ITEM_BUFFER:
+		{
+			// A projectile closing in, or an armed kart close behind.
+			const Vector vecOrigin = pBot->GetAbsOrigin();
+			for ( int i = 0; i < m_Projectiles.Count() && !bUse; i++ )
+			{
+				CBaseEntity *pProj = m_Projectiles[i];
+				if ( !pProj || pProj->GetOwnerEntity() == pBot )
+					continue;
+
+				Vector vecTo = vecOrigin - pProj->GetAbsOrigin();
+				if ( vecTo.LengthSqr() < Square( KART_BOT_THREAT_RANGE ) && DotProduct( pProj->GetAbsVelocity() - pBot->GetAbsVelocity(), vecTo ) > 0.0f )
+				{
+					bUse = true;
+					pszIntent = "buffer, projectile";
+				}
+			}
+
+			CHL2MP_Player *pBehind = bUse ? NULL : KartBot_FindKartInCone( pBot, flBackYaw, 30.0f, KART_BOT_THREAT_RANGE );
+			if ( pBehind && KartBot_IsArmed( pBehind ) )
+			{
+				bUse = true;
+				pszIntent = "buffer, armed kart behind";
+			}
+		}
+		break;
+	}
+
+	// Held too long with no reason: use it anyway (the oil slick dropped behind).
+	float flHoldMax = kart_bot_item_hold_max.GetFloat();
+	if ( !bUse && flHoldMax > 0.0f && flNow - st.flItemHeldSince > flHoldMax )
+	{
+		bUse = true;
+		bBackward = ( item == KART_ITEM_OIL_SLICK );
+		pszIntent = "held too long";
+	}
+
+	if ( !bUse )
+		return;
+
+	cmd.buttons |= bBackward ? IN_ATTACK2 : IN_ATTACK;
+	st.bItemPressed = true;
+	st.flItemReadyTime = flNow + KART_BOT_ITEM_REUSE;	// when the item couldn't be used right now
+	st.pszItemIntent = pszIntent;
+
+	if ( kart_debug_server.GetBool() || kart_bot_debug.GetBool() )
+	{
+		Msg( "[kart] Kart bot %s uses %s%s: %s\n", pBot->GetPlayerName(), KartItem_GetName( item ), bBackward ? " backward" : "", pszIntent );
 	}
 }
 

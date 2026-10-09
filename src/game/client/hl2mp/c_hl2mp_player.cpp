@@ -19,6 +19,7 @@
 #include "dlight.h"
 #include "soundenvelope.h"
 #include "bone_setup.h"
+#include "clienteffectprecachesystem.h"
 
 // Don't alias here
 #if defined( CHL2MP_Player )
@@ -53,8 +54,23 @@ ConVar cl_kart_driver_seat( "cl_kart_driver_seat", "-7 0 25", FCVAR_ARCHIVE, "Wh
 ConVar cl_kart_driver_feet( "cl_kart_driver_feet", "24 6 12", FCVAR_ARCHIVE, "Where the driver's feet rest, in kart model space; y is mirrored for the right foot." );
 ConVar cl_kart_driver_tilt( "cl_kart_driver_tilt", "5", FCVAR_ARCHIVE, "Degrees the driver's upper body leans forward towards the steering wheel." );
 ConVar cl_kart_driver_lean( "cl_kart_driver_lean", "10", FCVAR_ARCHIVE, "Degrees the driver's upper body leans into a full turn." );
+ConVar cl_kart_driver_look( "cl_kart_driver_look", "30", FCVAR_ARCHIVE, "Degrees the driver's head turns to look into a turn." );
 ConVar cl_kart_steer_drift_counter( "cl_kart_steer_drift_counter", "0.15 0.5 0.9", FCVAR_ARCHIVE, "Counter-steer in a drift as a fraction of cl_kart_steer_angle: steering into the drift, no steer, steering against it." );
 ConVar kart_cam_min_dist( "kart_cam_min_dist", "80", FCVAR_ARCHIVE, "Hide the local kart when a wall pulls the chase camera closer than this to it." );
+ConVar kart_boost_fov_kick( "kart_boost_fov_kick", "12", FCVAR_ARCHIVE, "Degrees the kart chase camera's field of view widens while boosting." );
+ConVar kart_boost_cam_pullback( "kart_boost_cam_pullback", "30", FCVAR_ARCHIVE, "Units the kart chase camera pulls back while boosting." );
+ConVar kart_boost_cam_blend( "kart_boost_cam_blend", "0.2", FCVAR_ARCHIVE, "Seconds the boost FOV kick and pull-back take to ease in and out." );
+ConVar kart_boost_fx( "kart_boost_fx", "1", FCVAR_ARCHIVE, "Draw the boost exhaust flame and mini-turbo drift sparks on karts." );
+
+CLIENTEFFECT_REGISTER_BEGIN( PrecacheKartBoostFX )
+CLIENTEFFECT_MATERIAL( "sprites/glow01" )
+CLIENTEFFECT_MATERIAL( "sprites/light_glow02_add" )
+CLIENTEFFECT_MATERIAL( "sprites/flamelet1" )
+CLIENTEFFECT_MATERIAL( "sprites/flamelet2" )
+CLIENTEFFECT_MATERIAL( "sprites/flamelet3" )
+CLIENTEFFECT_MATERIAL( "sprites/flamelet4" )
+CLIENTEFFECT_MATERIAL( "sprites/flamelet5" )
+CLIENTEFFECT_REGISTER_END()
 
 LINK_ENTITY_TO_CLASS( player, C_HL2MP_Player );
 
@@ -235,15 +251,20 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_flKartSkidDist = 0.0f;
 	m_bKartSkidActive = false;
 
+	m_flKartExhaustAccum = 0.0f;
+	m_flKartSparkAccum = 0.0f;
+
 	m_flKartCamYaw = 0.0f;
 	m_bKartCamActive = false;
 	m_bKartCamTooClose = false;
+	m_flKartCamBoost = 0.0f;
 
 	m_flKartSteerAngle = 0.0f;
 	m_iKartBoneSteerFL = -1;
 	m_nKartDriverModel = -1;
 	m_pKartDriver = NULL;
 	m_flKartDriverLean = 0.0f;
+	m_flKartDriverLook = 0.0f;
 	m_iKartBoneSteerFR = -1;
 	m_iKartBoneSteeringWheel = -1;
 
@@ -472,6 +493,7 @@ void C_HL2MP_Player::ClientThink( void )
 	UpdateKartSteering();
 	UpdateKartDriver();
 	UpdateKartSkidmarks();
+	UpdateKartBoostFX();
 
 	if ( IsLocalPlayer() && kart_debug.GetBool() )
 	{
@@ -513,6 +535,40 @@ void C_HL2MP_Player::DrawKartDebugOverlay( void )
 	DebugRow( "throttle", "%d (W=+1, S=-1)", nThrottle );
 	DebugRow( "steer", "%d (D=+1, A=-1)", nSteer );
 	DebugRow( "pred errors", "set cl_showerror 1 to log them" );
+
+	// Drift and boost state
+	DebugRow( "drifting", "%s", m_nKartDriftDir > 0 ? "right" : ( m_nKartDriftDir < 0 ? "left" : "no" ) );
+	DebugRow( "slip angle", "%.1f", m_flKartSlipAngle );
+	DebugRow( "drift time", "%.2f", m_flKartDriftTime );
+	DebugRow( "charge/tier", "%.2f / %d", m_flKartDriftCharge, m_nKartDriftTier );
+	DebugRow( "boost left", "%.2f", MAX( 0.0f, m_flKartBoostEndTime - gpGlobals->curtime ) );
+	DebugRow( "boost scale", "%.2f", IsKartBoosting() ? m_flKartBoostScale : 1.0f );
+	DebugRow( "hop airtime", "%.2f", m_flKartHopTime );
+
+	// Race state
+	CHL2MPRules *pRules = HL2MPRules();
+	int nLaps = pRules ? pRules->GetKartLaps() : 0;
+	int nRacers = pRules ? pRules->GetKartRacers() : 0;
+	float flLapTime = ( m_nKartLap > 0 && !m_bKartFinished ) ? MAX( 0.0f, gpGlobals->curtime - m_flKartLapStartTime ) : 0.0f;
+	DebugRow( "lap", "%d / %d", m_nKartLap, nLaps );
+	DebugRow( "next cp", "%d", m_nKartNextCheckpoint );
+	DebugRow( "progress", "%.3f", m_flKartProgress );
+	DebugRow( "position", "%d / %d", m_nKartRacePosition, nRacers );
+	DebugRow( "wrong way", "%s", m_bKartWrongWay ? "WRONG WAY" : "no" );
+	DebugRow( "lap time", "%.2f", flLapTime );
+	DebugRow( "best lap", "%.2f", m_flKartBestLap );
+	DebugRow( "finished", "%s", m_bKartFinished ? "yes" : "no" );
+
+	// Every kart player, for checking a second client or bots
+	DebugRow( "players", "pos lap progress" );
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		C_HL2MP_Player *pKart = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( !pKart || !pKart->IsInKart() )
+			continue;
+		DebugRow( pKart->GetPlayerName(), "%d  lap %d  %.3f%s", pKart->GetKartRacePosition(), pKart->GetKartLap(),
+			pKart->GetKartProgress(), pKart->IsKartFinished() ? "  finished" : "" );
+	}
 }
 
 // Top speed the engine pitch is mapped to: the replicated movement convar
@@ -623,9 +679,11 @@ static Vector KartConVarVector( const ConVar &var )
 //			HL2MP's models (citizens and combine, all on the ValveBiped
 //			skeleton) have no seated animation, so the idle pose is posed in
 //			code: moved onto the seat, the upper body tilted towards the
-//			steering wheel and leaning into turns, then the legs reach for the
-//			pedals and the hands for the kart's grip_l/grip_r attachments,
-//			which turn with the steering wheel.
+//			steering wheel and leaning into turns, the head looking into
+//			them, then the legs reach for the pedals and the hands for the
+//			kart's grip_l/grip_r attachments, which turn with the steering
+//			wheel. The models' head_yaw pose parameter would need a sequence
+//			with a head_rot autolayer, which the reference pose lacks.
 //-----------------------------------------------------------------------------
 enum
 {
@@ -640,7 +698,7 @@ class C_KartDriver : public C_BaseAnimating
 {
 	DECLARE_CLASS( C_KartDriver, C_BaseAnimating );
 public:
-	explicit C_KartDriver( C_HL2MP_Player *pKart ) : m_pKart( pKart ), m_iPelvis( -1 ), m_iSpine( -1 ) {}
+	explicit C_KartDriver( C_HL2MP_Player *pKart ) : m_pKart( pKart ), m_iPelvis( -1 ), m_iSpine( -1 ), m_iHead( -1 ) {}
 
 	virtual CStudioHdr *OnNewModel( void ) OVERRIDE;
 	virtual bool ShouldDraw( void ) OVERRIDE;
@@ -651,6 +709,7 @@ private:
 	C_HL2MP_Player *m_pKart;	// owns this entity and removes it before it goes
 	int		m_iPelvis;
 	int		m_iSpine;
+	int		m_iHead;	// -1 when the model lacks one: the head then stays put
 	int		m_iLimb[KART_DRIVER_LIMBS][3];	// thigh, calf, foot / upper arm, forearm, hand; -1 when the model lacks one
 };
 
@@ -667,6 +726,7 @@ CStudioHdr *C_KartDriver::OnNewModel( void )
 	};
 	m_iPelvis = LookupBone( "ValveBiped.Bip01_Pelvis" );
 	m_iSpine = LookupBone( "ValveBiped.Bip01_Spine" );
+	m_iHead = LookupBone( "ValveBiped.Bip01_Head1" );
 	for ( int i = 0; i < KART_DRIVER_LIMBS; ++i )
 	{
 		for ( int j = 0; j < 3; ++j )
@@ -763,6 +823,33 @@ void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Qu
 		}
 	}
 
+	// The head (and anything on it) turns about the upper body's up axis to
+	// look into the turn. Positive turns about up are to the left.
+	if ( m_iHead >= 0 && ( pStudioHdr->boneFlags( m_iHead ) & boneMask ) )
+	{
+		Vector vecUpperUp, vecHead;
+		VectorRotate( vecUp, matUpper, vecUpperUp );
+		MatrixPosition( pBones[m_iHead], vecHead );
+		matrix3x4_t matLook;
+		MatrixBuildRotationAboutAxis( vecUpperUp, -m_pKart->GetKartDriverLook() * cl_kart_driver_look.GetFloat(), matLook );
+		Vector vecPivot;
+		VectorRotate( vecHead, matLook, vecPivot );
+		MatrixSetColumn( vecHead - vecPivot, 3, matLook );
+
+		bool bHead[MAXSTUDIOBONES];
+		for ( int i = 0; i < nBones; ++i )
+		{
+			int iParent = pStudioHdr->boneParent( i );
+			bHead[i] = ( i == m_iHead ) || ( iParent >= 0 && bHead[iParent] );
+			if ( bHead[i] )
+			{
+				matrix3x4_t matOld;
+				MatrixCopy( pBones[i], matOld );
+				ConcatTransforms( matLook, matOld, pBones[i] );
+			}
+		}
+	}
+
 	matrix3x4_t matBefore[MAXSTUDIOBONES];
 	memcpy( matBefore, pBones, nBones * sizeof( matrix3x4_t ) );
 
@@ -818,6 +905,7 @@ void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Qu
 //			server has picked a model, replaced when the model changes, gone
 //			with the kart. Eases the lean towards the turn, which grows with
 //			speed: into the drift while drifting, else the way it is steering.
+//			The head looks the same way at any speed.
 //-----------------------------------------------------------------------------
 void C_HL2MP_Player::UpdateKartDriver( void )
 {
@@ -827,6 +915,7 @@ void C_HL2MP_Player::UpdateKartDriver( void )
 	{
 		RemoveKartDriver();
 		m_flKartDriverLean = 0.0f;
+		m_flKartDriverLook = 0.0f;
 		return;
 	}
 
@@ -834,6 +923,7 @@ void C_HL2MP_Player::UpdateKartDriver( void )
 	float flTarget = flTurn * RemapValClamped( fabs( m_flKartSpeed ), 0.0f, KartEngineMaxSpeed() * 0.5f, 0.0f, 1.0f );
 	float flBlend = clamp( gpGlobals->frametime * cl_kart_steer_speed.GetFloat() * 0.5f, 0.0f, 1.0f );
 	m_flKartDriverLean += ( flTarget - m_flKartDriverLean ) * flBlend;
+	m_flKartDriverLook += ( flTurn - m_flKartDriverLook ) * flBlend;
 
 	if ( m_pKartDriver && m_pKartDriver->GetModel() != pModel )
 	{
@@ -1069,6 +1159,222 @@ void C_HL2MP_Player::ShootKartSkidmark( const char *pszAttachment, float flSide,
 
 	Vector vecPos = tr.endpos - vecDir * KART_SKIDMARK_HALF_LENGTH;
 	effects->DecalShoot( iDecal, pHit->entindex(), pHit->GetModel(), pHit->GetAbsOrigin(), pHit->GetAbsAngles(), vecPos, &vecRight, 0 );
+}
+
+// Exhaust and spark emission rates, particles per second (sparks per rear wheel).
+#define KART_EXHAUST_RATE		60.0f
+#define KART_SPARK_RATE_BASE	20.0f
+#define KART_SPARK_RATE_TIER	15.0f
+// Most particles one think may emit, so a hitch doesn't dump a burst.
+#define KART_FX_MAX_PER_THINK	6
+
+// Mini-turbo spark colors by drift tier (index 0 unused): ice blue, amber, magenta.
+static const color24 s_KartSparkColors[] =
+{
+	{ 255, 255, 255 },
+	{ 90, 180, 255 },
+	{ 255, 160, 40 },
+	{ 255, 60, 200 },
+};
+
+//-----------------------------------------------------------------------------
+// Purpose: Boost flame at the exhaust while boosting, and sparks at the rear
+//			wheels colored by the mini-turbo tier while drifting. Both come
+//			from networked state, so remote karts get them too. The particles
+//			live a fraction of a second: when the boost or drift ends (or the
+//			kart dies, respawns or leaves the PVS) the emission stops and the
+//			effect is gone a moment later.
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::UpdateKartBoostFX( void )
+{
+	bool bActive = kart_boost_fx.GetBool() && IsInKart() && IsAlive() && !IsDormant();
+	bool bExhaust = bActive && IsKartBoosting();
+	bool bSparks = bActive && IsDrifting() && GetKartDriftTier() > 0;
+
+	if ( !bExhaust )
+		m_flKartExhaustAccum = 0.0f;
+	if ( !bSparks )
+		m_flKartSparkAccum = 0.0f;
+	if ( !bExhaust && !bSparks )
+		return;
+
+	if ( !m_pKartFXEmitter )
+	{
+		m_pKartFXEmitter = CSimpleEmitter::Create( "C_HL2MP_Player::KartBoostFX" );
+		if ( !m_pKartFXEmitter )
+			return;
+	}
+	m_pKartFXEmitter->SetSortOrigin( GetAbsOrigin() );
+
+	if ( bExhaust )
+	{
+		m_flKartExhaustAccum += gpGlobals->frametime * KART_EXHAUST_RATE;
+		int nCount = (int)m_flKartExhaustAccum;
+		m_flKartExhaustAccum -= nCount;
+		if ( nCount > 0 )
+		{
+			EmitKartExhaust( MIN( nCount, KART_FX_MAX_PER_THINK ) );
+		}
+	}
+
+	if ( bSparks )
+	{
+		m_flKartSparkAccum += gpGlobals->frametime * ( KART_SPARK_RATE_BASE + KART_SPARK_RATE_TIER * GetKartDriftTier() );
+		int nCount = (int)m_flKartSparkAccum;
+		m_flKartSparkAccum -= nCount;
+		if ( nCount > 0 )
+		{
+			EmitKartDriftSparks( MIN( nCount, KART_FX_MAX_PER_THINK ) );
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Boost flame: a glow on the exhaust pipe and flame puffs blown out
+//			of it. Models without an exhaust attachment use a point behind the
+//			kart hull. The particles carry the kart's velocity so the flame
+//			stays on the pipe at speed.
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::EmitKartExhaust( int nCount )
+{
+	Vector vecForward, vecRight, vecUp;
+	AngleVectors( QAngle( 0, m_flKartYaw, 0 ), &vecForward, &vecRight, &vecUp );
+
+	Vector vecPos, vecDir;
+	QAngle angExhaust;
+	int iAttachment = LookupAttachment( "exhaust" );
+	if ( iAttachment > 0 && GetAttachment( iAttachment, vecPos, angExhaust ) )
+	{
+		AngleVectors( angExhaust, &vecDir );
+	}
+	else
+	{
+		vecPos = GetAbsOrigin() + vecForward * ( KART_HULL_MIN.x - 4.0f ) + vecUp * 24.0f;
+		vecDir = -vecForward;
+	}
+
+	Vector vecKartVel;
+	EstimateAbsVelocity( vecKartVel );
+
+	PMaterialHandle hGlow = m_pKartFXEmitter->GetPMaterial( "sprites/light_glow02_add" );
+	PMaterialHandle hHalo = m_pKartFXEmitter->GetPMaterial( "sprites/glow01" );
+
+	for ( int i = 0; i < nCount; i++ )
+	{
+		// Hot core on the pipe.
+		SimpleParticle *pParticle = m_pKartFXEmitter->AddSimpleParticle( hGlow, vecPos, 0.05f, 22 );
+		if ( pParticle )
+		{
+			pParticle->m_vecVelocity = vecKartVel;
+			pParticle->m_uchColor[0] = 255;
+			pParticle->m_uchColor[1] = 230;
+			pParticle->m_uchColor[2] = 180;
+			pParticle->m_uchStartAlpha = 255;
+			pParticle->m_uchEndAlpha = 0;
+			pParticle->m_uchStartSize = RandomInt( 18, 24 );
+			pParticle->m_uchEndSize = 12;
+		}
+
+		// Wider orange halo.
+		pParticle = m_pKartFXEmitter->AddSimpleParticle( hHalo, vecPos + vecDir * 6.0f, 0.06f, 40 );
+		if ( pParticle )
+		{
+			pParticle->m_vecVelocity = vecKartVel;
+			pParticle->m_uchColor[0] = 255;
+			pParticle->m_uchColor[1] = 140;
+			pParticle->m_uchColor[2] = 50;
+			pParticle->m_uchStartAlpha = 160;
+			pParticle->m_uchEndAlpha = 0;
+			pParticle->m_uchStartSize = RandomInt( 34, 44 );
+			pParticle->m_uchEndSize = 24;
+		}
+
+		// Flame puff blown out of the pipe.
+		char szFlame[32];
+		Q_snprintf( szFlame, sizeof( szFlame ), "sprites/flamelet%d", RandomInt( 1, 5 ) );
+		pParticle = m_pKartFXEmitter->AddSimpleParticle( m_pKartFXEmitter->GetPMaterial( szFlame ), vecPos, RandomFloat( 0.08f, 0.14f ), 12 );
+		if ( pParticle )
+		{
+			pParticle->m_vecVelocity = vecKartVel + vecDir * RandomFloat( 180.0f, 280.0f ) + vecRight * RandomFloat( -25.0f, 25.0f ) + vecUp * RandomFloat( -10.0f, 30.0f );
+			pParticle->m_uchColor[0] = 255;
+			pParticle->m_uchColor[1] = 255;
+			pParticle->m_uchColor[2] = 255;
+			pParticle->m_uchStartAlpha = 255;
+			pParticle->m_uchEndAlpha = 0;
+			pParticle->m_uchStartSize = RandomInt( 10, 14 );
+			pParticle->m_uchEndSize = RandomInt( 2, 4 );
+			pParticle->m_flRoll = RandomFloat( 0.0f, 360.0f );
+			pParticle->m_flRollDelta = RandomFloat( -4.0f, 4.0f );
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Mini-turbo sparks thrown back off each rear wheel, with a glow on
+//			the wheel, in the color of the drift tier the charge has reached.
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::EmitKartDriftSparks( int nCount )
+{
+	int nTier = clamp( GetKartDriftTier(), 1, (int)ARRAYSIZE( s_KartSparkColors ) - 1 );
+	const color24 &color = s_KartSparkColors[ nTier ];
+
+	Vector vecForward, vecLeft, vecUp;
+	AngleVectors( QAngle( 0, m_flKartYaw, 0 ), &vecForward, &vecLeft, &vecUp );
+	vecLeft.Negate();
+
+	Vector vecKartVel;
+	EstimateAbsVelocity( vecKartVel );
+
+	PMaterialHandle hSpark = m_pKartFXEmitter->GetPMaterial( "sprites/light_glow02_add" );
+	PMaterialHandle hGlow = m_pKartFXEmitter->GetPMaterial( "sprites/glow01" );
+
+	static const char *s_pszWheels[] = { "wheel_rl", "wheel_rr" };
+	for ( int iWheel = 0; iWheel < 2; iWheel++ )
+	{
+		float flSide = iWheel == 0 ? 1.0f : -1.0f;
+
+		Vector vecWheel;
+		QAngle angWheel;
+		int iAttachment = LookupAttachment( s_pszWheels[iWheel] );
+		if ( iAttachment <= 0 || !GetAttachment( iAttachment, vecWheel, angWheel ) )
+		{
+			vecWheel = GetAbsOrigin() + vecForward * ( KART_HULL_MIN.x * 0.75f ) + vecLeft * ( flSide * KART_HULL_MAX.y * 0.75f );
+		}
+		vecWheel += vecUp * 3.0f;
+
+		// Glow on the wheel, bigger with the tier.
+		SimpleParticle *pParticle = m_pKartFXEmitter->AddSimpleParticle( hGlow, vecWheel, 0.08f, 16 );
+		if ( pParticle )
+		{
+			pParticle->m_vecVelocity = vecKartVel;
+			pParticle->m_uchColor[0] = color.r;
+			pParticle->m_uchColor[1] = color.g;
+			pParticle->m_uchColor[2] = color.b;
+			pParticle->m_uchStartAlpha = 200;
+			pParticle->m_uchEndAlpha = 0;
+			pParticle->m_uchStartSize = 10 + 5 * nTier;
+			pParticle->m_uchEndSize = 6 + 3 * nTier;
+		}
+
+		for ( int i = 0; i < nCount; i++ )
+		{
+			pParticle = m_pKartFXEmitter->AddSimpleParticle( hSpark, vecWheel, RandomFloat( 0.15f, 0.3f ), 4 );
+			if ( !pParticle )
+				break;
+
+			pParticle->m_vecVelocity = vecKartVel * 0.7f
+				- vecForward * RandomFloat( 60.0f, 160.0f )
+				+ vecLeft * ( flSide * RandomFloat( 0.0f, 80.0f ) )
+				+ vecUp * RandomFloat( 40.0f, 140.0f );
+			pParticle->m_uchColor[0] = color.r;
+			pParticle->m_uchColor[1] = color.g;
+			pParticle->m_uchColor[2] = color.b;
+			pParticle->m_uchStartAlpha = 255;
+			pParticle->m_uchEndAlpha = 0;
+			pParticle->m_uchStartSize = RandomInt( 3, 5 );
+			pParticle->m_uchEndSize = 1;
+		}
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1781,6 +2087,7 @@ void C_HL2MP_Player::CalcKartView( Vector &eyeOrigin, QAngle &eyeAngles, float &
 	if ( !m_bKartCamActive )
 	{
 		m_flKartCamYaw = m_flKartYaw;
+		m_flKartCamBoost = 0.0f;
 		m_bKartCamActive = true;
 	}
 	else
@@ -1799,9 +2106,16 @@ void C_HL2MP_Player::CalcKartView( Vector &eyeOrigin, QAngle &eyeAngles, float &
 		flCamYaw = AngleNormalize( m_flKartYaw + 180.0f );
 	}
 
+	// Boost: ease the FOV kick and the pull-back in and out over kart_boost_cam_blend.
+	float flBoostTarget = IsKartBoosting() ? 1.0f : 0.0f;
+	float flBlendTime = kart_boost_cam_blend.GetFloat();
+	m_flKartCamBoost = flBlendTime > 0.0f ? Approach( flBoostTarget, m_flKartCamBoost, gpGlobals->frametime / flBlendTime ) : flBoostTarget;
+	float flBoost = SimpleSpline( m_flKartCamBoost );
+
 	Vector vecForward;
 	AngleVectors( QAngle( 0.0f, flCamYaw, 0.0f ), &vecForward );
-	Vector vecCamera = vecTarget - vecForward * kart_cam_dist.GetFloat() + Vector( 0.0f, 0.0f, kart_cam_height.GetFloat() );
+	float flCamDist = kart_cam_dist.GetFloat() + flBoost * kart_boost_cam_pullback.GetFloat();
+	Vector vecCamera = vecTarget - vecForward * flCamDist + Vector( 0.0f, 0.0f, kart_cam_height.GetFloat() );
 
 	Vector WALL_MIN( -WALL_OFFSET, -WALL_OFFSET, -WALL_OFFSET );
 	Vector WALL_MAX( WALL_OFFSET, WALL_OFFSET, WALL_OFFSET );
@@ -1824,7 +2138,7 @@ void C_HL2MP_Player::CalcKartView( Vector &eyeOrigin, QAngle &eyeAngles, float &
 	VectorAngles( vecLook, eyeAngles );
 	eyeAngles[ROLL] = 0.0f;
 
-	fov = kart_cam_fov.GetFloat();
+	fov = kart_cam_fov.GetFloat() + flBoost * kart_boost_fov_kick.GetFloat();
 }
 
 IRagdoll* C_HL2MP_Player::GetRepresentativeRagdoll() const

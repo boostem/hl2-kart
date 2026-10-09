@@ -218,6 +218,7 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartBoostScale = 1.0f;
 	m_nKartHitState = KART_HIT_NONE;
 	m_flKartHitEndTime = 0.0f;
+	m_flKartTopSpeedScale = 1.0f;
 	m_flKartRespawnUnfreezeTime = 0.0f;
 	m_flKartNextRespawnCommand = 0.0f;
 
@@ -291,6 +292,7 @@ void CHL2MP_Player::Precache( void )
 	PrecacheScriptSound( "Kart.Skid" );
 	PrecacheScriptSound( "Kart.Impact" );
 	PrecacheScriptSound( "Kart.RouletteTick" );
+	PrecacheScriptSound( "Kart.Nitro" );
 	PrecacheScriptSound( KART_SOUND_RESPAWN );
 	PrecacheScriptSound( KART_SOUND_HIT_IMPACT );
 	PrecacheScriptSound( KART_SOUND_HIT_SPINOUT );

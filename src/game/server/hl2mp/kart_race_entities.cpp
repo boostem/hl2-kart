@@ -16,8 +16,9 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
-ConVar kart_debug_server( "kart_debug_server", "0", 0, "1: draw kart race checkpoints, the finish line, grid slots and each kart model's attachments with debug overlays, and log checkpoint touches. 2: also draw the bots' racing line." );
+ConVar kart_debug_server( "kart_debug_server", "0", 0, "1: draw kart race checkpoints, the finish line, grid slots and each kart model's attachments with debug overlays, and log checkpoint and boost pad touches. 2: also draw the bots' racing line." );
 
+ConVar kart_laps( "kart_laps", "0", FCVAR_NOTIFY, "Laps per race, overriding the kart_race_manager laps keyvalue. 0 uses the map's value.", true, 0, true, KART_MAX_LAPS );
 ConVar kart_wrongway_time( "kart_wrongway_time", "1", FCVAR_NOTIFY, "Seconds a kart has to face or drive against the track before it is told it is going the wrong way.", true, 0, false, 0 );
 
 // Seconds a wrong-way kart has to face forward again before the warning clears.
@@ -184,6 +185,111 @@ void CKartRespawnZone::StartTouch( CBaseEntity *pOther )
 }
 
 // ##################################################################################
+//	>> kart_boost_pad
+// ##################################################################################
+#define KART_SOUND_BOOST_PAD	"Kart.BoostPad"
+
+LINK_ENTITY_TO_CLASS( kart_boost_pad, CKartBoostPad );
+
+BEGIN_DATADESC( CKartBoostPad )
+	DEFINE_KEYFIELD( m_flBoostDuration, FIELD_FLOAT, "boost_duration" ),
+	DEFINE_KEYFIELD( m_flBoostScale, FIELD_FLOAT, "boost_scale" ),
+	DEFINE_KEYFIELD( m_flCooldown, FIELD_FLOAT, "cooldown" ),
+	DEFINE_OUTPUT( m_OnBoost, "OnBoost" ),
+END_DATADESC()
+
+CKartBoostPad::CKartBoostPad()
+{
+	m_flBoostDuration = 1.0f;
+	m_flBoostScale = 1.4f;
+	m_flCooldown = 1.0f;
+
+	for ( int i = 0; i < ARRAYSIZE( m_flNextBoostTime ); i++ )
+	{
+		m_flNextBoostTime[i] = 0.0f;
+	}
+}
+
+void CKartBoostPad::Precache( void )
+{
+	BaseClass::Precache();
+
+	PrecacheScriptSound( KART_SOUND_BOOST_PAD );
+}
+
+void CKartBoostPad::Spawn( void )
+{
+	Precache();
+
+	// Only players pass; StartTouch narrows that down to karts.
+	AddSpawnFlags( SF_TRIGGER_ALLOW_CLIENTS );
+
+	BaseClass::Spawn();
+
+	InitTrigger();
+}
+
+void CKartBoostPad::StartTouch( CBaseEntity *pOther )
+{
+	BaseClass::StartTouch( pOther );
+
+	if ( !pOther->IsPlayer() || !PassesTriggerFilters( pOther ) )
+		return;
+
+	CHL2MP_Player *pPlayer = ToHL2MPPlayer( pOther );
+	// A hit stops any boost (CKartGameMovement), so a kart that is hit gets nothing.
+	if ( !pPlayer || !pPlayer->IsInKart() || !pPlayer->IsAlive() || pPlayer->IsKartHit() )
+		return;
+
+	int iSlot = pPlayer->entindex();
+	if ( iSlot < 0 || iSlot >= ARRAYSIZE( m_flNextBoostTime ) || gpGlobals->curtime < m_flNextBoostTime[iSlot] )
+		return;
+
+	m_flNextBoostTime[iSlot] = gpGlobals->curtime + MAX( m_flCooldown, 0.0f );
+
+	pPlayer->KartGiveBoost( m_flBoostDuration, m_flBoostScale );
+
+	// From the kart: a brush entity's origin is often the world origin.
+	pPlayer->EmitSound( KART_SOUND_BOOST_PAD );
+
+	m_OnBoost.FireOutput( pPlayer, this );
+
+	if ( kart_debug_server.GetBool() )
+	{
+		Msg( "[kart] %s boosted by a kart_boost_pad at %.2f (%.2f s, x%.2f)\n", pPlayer->GetPlayerName(), gpGlobals->curtime, m_flBoostDuration, m_flBoostScale );
+	}
+}
+
+// ##################################################################################
+//	>> kart_start_lights
+// ##################################################################################
+#define KART_START_LIGHTS_MODEL	"models/kart/props/start_lights.mdl"
+
+LINK_ENTITY_TO_CLASS( kart_start_lights, CKartStartLights );
+
+void CKartStartLights::Precache( void )
+{
+	if ( GetModelName() == NULL_STRING )
+	{
+		SetModelName( AllocPooledString( KART_START_LIGHTS_MODEL ) );
+	}
+
+	PrecacheModel( STRING( GetModelName() ) );
+
+	BaseClass::Precache();
+}
+
+void CKartStartLights::Spawn( void )
+{
+	Precache();
+
+	// Solid to karts, like the other track props.
+	SetSolid( SOLID_VPHYSICS );
+
+	BaseClass::Spawn();
+}
+
+// ##################################################################################
 //	>> kart_start
 // ##################################################################################
 LINK_ENTITY_TO_CLASS( kart_start, CKartStart );
@@ -311,6 +417,11 @@ void CKartRaceManager::Spawn( void )
 	g_pKartRaceManager = this;
 
 	Precache();
+
+	if ( kart_laps.GetInt() > 0 )
+	{
+		m_iLaps = kart_laps.GetInt();
+	}
 
 	if ( m_iLaps < 1 )
 	{

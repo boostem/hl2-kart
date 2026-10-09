@@ -134,6 +134,11 @@ public:
 	// Spins out or stuns the kart (pAttacker: who threw the item, may be NULL).
 	// False when it can't be hit: immune, not a live kart, or frozen.
 	bool KartApplyHit( KartHitType type, CBaseEntity *pAttacker );
+	// kart_max_speed multiplier of this kart's top speed: 1 for people, set
+	// each tick by the kart bot (difficulty and rubber-banding). Not
+	// networked: bots aren't predicted.
+	float GetKartTopSpeedScale( void ) const { return m_flKartTopSpeedScale; }
+	void SetKartTopSpeedScale( float flScale ) { m_flKartTopSpeedScale = flScale; }
 
 	// Stops the kart and clears its drift, hop, drift charge and boost, heading flYaw.
 	void ResetKartMovement( float flYaw );
@@ -245,6 +250,7 @@ private:
 	CNetworkVar( float, m_flKartBoostScale );	// kart_max_speed multiplier of the current boost
 	CNetworkVar( int, m_nKartHitState );		// KartHitType being played out, KART_HIT_NONE when none
 	CNetworkVar( float, m_flKartHitEndTime );	// time the hit ends (and kart_hit_immunity starts counting)
+	float m_flKartTopSpeedScale;				// kart_max_speed multiplier of the top speed, see GetKartTopSpeedScale
 
 	// Kart race state. Only the race manager and the race flow change it.
 	friend class CKartRaceManager;
