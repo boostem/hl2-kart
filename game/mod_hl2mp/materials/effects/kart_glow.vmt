@@ -1,0 +1,12 @@
+// The glow01 texture as an additive, vertex-colored particle material for the kart
+// boost and drift FX. sprites/glow01.vmt uses the Sprite shader, which draws an
+// opaque black square when a particle emitter renders it.
+"UnlitGeneric"
+{
+	"$basetexture" "sprites/glow01"
+	"$additive" "1"
+	"$translucent" "1"
+	"$vertexcolor" "1"
+	"$vertexalpha" "1"
+	"$nocull" "1"
+}

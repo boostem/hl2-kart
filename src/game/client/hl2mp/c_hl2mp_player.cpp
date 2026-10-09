@@ -67,7 +67,7 @@ ConVar kart_boost_cam_blend( "kart_boost_cam_blend", "0.2", FCVAR_ARCHIVE, "Seco
 ConVar kart_boost_fx( "kart_boost_fx", "1", FCVAR_ARCHIVE, "Draw the boost exhaust flame and mini-turbo drift sparks on karts." );
 
 CLIENTEFFECT_REGISTER_BEGIN( PrecacheKartBoostFX )
-CLIENTEFFECT_MATERIAL( "sprites/glow01" )
+CLIENTEFFECT_MATERIAL( "effects/kart_glow" )
 CLIENTEFFECT_MATERIAL( "sprites/light_glow02_add" )
 CLIENTEFFECT_MATERIAL( "sprites/flamelet1" )
 CLIENTEFFECT_MATERIAL( "sprites/flamelet2" )
@@ -746,6 +746,7 @@ public:
 	virtual bool ShouldDraw( void ) OVERRIDE;
 	virtual int DrawModel( int flags ) OVERRIDE;
 	virtual void BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed ) OVERRIDE;
+	virtual void SetupWeights( const matrix3x4_t *pBoneToWorld, int nFlexWeightCount, float *pFlexWeights, float *pFlexDelayedWeights ) OVERRIDE;
 
 private:
 	bool PoseFromAnims( CStudioHdr *pStudioHdr, Quaternion q[] );
@@ -813,10 +814,17 @@ CStudioHdr *C_KartDriver::OnNewModel( void )
 		}
 	}
 
+	// Bones the animations' bone setup skips (not flagged as used) would come
+	// out of it uninitialized: those keep the model's own pose.
 	const int nBones = hdr ? MIN( hdr->numbones(), MAXSTUDIOBONES ) : 0;
 	for ( int i = 0; i < nBones; ++i )
 	{
-		m_iAnimsBone[i] = m_pAnims ? Studio_BoneIndexByName( m_pAnims, hdr->pBone( i )->pszName() ) : -1;
+		int iAnimsBone = m_pAnims ? Studio_BoneIndexByName( m_pAnims, hdr->pBone( i )->pszName() ) : -1;
+		if ( iAnimsBone >= 0 && !( m_pAnims->boneFlags( iAnimsBone ) & BONE_USED_BY_ANYTHING ) )
+		{
+			iAnimsBone = -1;
+		}
+		m_iAnimsBone[i] = iAnimsBone;
 	}
 
 	return hdr;
@@ -834,6 +842,26 @@ int C_KartDriver::DrawModel( int flags )
 		return 0;
 
 	return BaseClass::DrawModel( flags );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: A neutral face. The player models have facial flexes, and the
+//			engine hands over uninitialized flex weights that only C_BaseFlex
+//			fills in: left as they are, they throw the face's vertices across
+//			the screen.
+//-----------------------------------------------------------------------------
+void C_KartDriver::SetupWeights( const matrix3x4_t *pBoneToWorld, int nFlexWeightCount, float *pFlexWeights, float *pFlexDelayedWeights )
+{
+	BaseClass::SetupWeights( pBoneToWorld, nFlexWeightCount, pFlexWeights, pFlexDelayedWeights );
+
+	if ( pFlexWeights && nFlexWeightCount > 0 )
+	{
+		memset( pFlexWeights, 0, nFlexWeightCount * sizeof( float ) );
+	}
+	if ( pFlexDelayedWeights && nFlexWeightCount > 0 )
+	{
+		memset( pFlexDelayedWeights, 0, nFlexWeightCount * sizeof( float ) );
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1514,7 +1542,7 @@ void C_HL2MP_Player::EmitKartExhaust( int nCount )
 	EstimateAbsVelocity( vecKartVel );
 
 	PMaterialHandle hGlow = m_pKartFXEmitter->GetPMaterial( "sprites/light_glow02_add" );
-	PMaterialHandle hHalo = m_pKartFXEmitter->GetPMaterial( "sprites/glow01" );
+	PMaterialHandle hHalo = m_pKartFXEmitter->GetPMaterial( "effects/kart_glow" );
 
 	for ( int i = 0; i < nCount; i++ )
 	{
@@ -1583,7 +1611,7 @@ void C_HL2MP_Player::EmitKartDriftSparks( int nCount )
 	EstimateAbsVelocity( vecKartVel );
 
 	PMaterialHandle hSpark = m_pKartFXEmitter->GetPMaterial( "sprites/light_glow02_add" );
-	PMaterialHandle hGlow = m_pKartFXEmitter->GetPMaterial( "sprites/glow01" );
+	PMaterialHandle hGlow = m_pKartFXEmitter->GetPMaterial( "effects/kart_glow" );
 
 	static const char *s_pszWheels[] = { "wheel_rl", "wheel_rr" };
 	for ( int iWheel = 0; iWheel < 2; iWheel++ )
