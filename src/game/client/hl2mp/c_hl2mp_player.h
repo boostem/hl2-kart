@@ -147,6 +147,7 @@ public:
 	float GetKartBestLap( void ) const { return m_flKartBestLap; }
 	float GetKartTotalTime( void ) const { return m_flKartTotalTime; }
 	bool IsKartLateJoin( void ) const { return m_bKartLateJoin; }
+	bool IsKartWrongWay( void ) const { return m_bKartWrongWay; }
 
 	// Kart item (see kart_items.h), networked for every player.
 	int GetKartItem( void ) const { return m_nKartItem; }
@@ -161,6 +162,11 @@ public:
 	// Kart engine loops, created on the client for every kart player in PVS.
 	void UpdateKartSounds( void );
 	void StopKartSounds( void );
+	float GetKartSkidSlipAngle( void );
+
+	// Tire marks behind the rear wheels while drifting, for every kart player in PVS.
+	void UpdateKartSkidmarks( void );
+	void ShootKartSkidmark( const char *pszAttachment, float flSide, const Vector &vecDir );
 
 	virtual void PostThink( void );
 
@@ -233,6 +239,7 @@ private:
 	float	m_flKartBestLap;
 	float	m_flKartTotalTime;
 	bool	m_bKartLateJoin;
+	bool	m_bKartWrongWay;
 
 	// Kart item, from the server.
 	int		m_nKartItem;
@@ -242,7 +249,12 @@ private:
 
 	CSoundPatch	*m_pKartEngineIdle;
 	CSoundPatch	*m_pKartEngineRev;
+	CSoundPatch	*m_pKartSkid;		// drift screech, only while drifting
 	float	m_flKartSoundLastSpeed;	// |m_flKartSpeed| at the last think, for remote throttle
+
+	Vector	m_vecKartSkidLastPos;	// origin at the last skidmark think
+	float	m_flKartSkidDist;		// units travelled while drifting since the last skidmark
+	bool	m_bKartSkidActive;		// m_vecKartSkidLastPos is valid
 
 	// Chase camera (local player only, never predicted or networked).
 	void	CalcKartView( Vector &eyeOrigin, QAngle &eyeAngles, float &fov );

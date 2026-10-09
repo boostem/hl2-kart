@@ -1,9 +1,10 @@
 //========= Copyright Valve Corporation, All rights reserved. ============//
 //
-// Purpose: Kart race HUD: the lap counter ("LAP 2/3") and the race position
-//			("3rd / 8"). Both read the local player's networked race state
-//			(kart_race_shared.h); the lap and racer totals come from the game
-//			rules. A position change runs KartPositionPulse (HudAnimations.txt).
+// Purpose: Kart race HUD: the lap counter ("LAP 2/3"), the race position
+//			("3rd / 8") and the race timer. They read the local player's
+//			networked race state (kart_race_shared.h); the lap and racer totals
+//			come from the game rules. A position change runs KartPositionPulse
+//			and a new best lap KartTimerBestLap (HudAnimations.txt).
 //
 //=============================================================================//
 
@@ -11,6 +12,7 @@
 #include "kart_hud_base.h"
 #include "c_hl2mp_player.h"
 #include "hl2mp_gamerules.h"
+#include "kart_race_shared.h"
 #include "iclientmode.h"
 #include <vgui/ISurface.h>
 #include <vgui_controls/AnimationController.h>
@@ -231,3 +233,162 @@ private:
 };
 
 DECLARE_HUDELEMENT( CKartPosition );
+
+//-----------------------------------------------------------------------------
+// Purpose: Race times, top right, three right-aligned rows in mm:ss.mmm:
+//			TOTAL (running race time), LAP (current lap) and BEST (fastest lap
+//			so far). Hidden before the first crossing of the line. Once the
+//			player has finished the clock stops: TOTAL shows the final race
+//			time in amber and LAP goes away. A lap faster than the best so far
+//			(kart_lap) runs KartTimerBestLap, a flash of the BEST row.
+//-----------------------------------------------------------------------------
+class CKartTimer : public CKartHudElement
+{
+	DECLARE_CLASS_SIMPLE( CKartTimer, CKartHudElement );
+
+public:
+	CKartTimer( const char *pElementName ) : BaseClass( pElementName, "KartTimer" )
+	{
+		m_flBestSeen = 0.0f;
+	}
+
+	virtual void Init( void )
+	{
+		ListenForGameEvent( KART_EVENT_LAP );
+	}
+
+	virtual void Reset( void )
+	{
+		m_flBestSeen = 0.0f;
+		m_flBestFlash = 0.0f;
+	}
+
+	virtual bool ShouldDraw( void )
+	{
+		if ( !BaseClass::ShouldDraw() )
+			return false;
+
+		C_HL2MP_Player *pPlayer = C_HL2MP_Player::GetLocalHL2MPPlayer();
+		return pPlayer->GetKartLap() > 0 || pPlayer->IsKartFinished();
+	}
+
+	virtual void FireGameEvent( IGameEvent *event )
+	{
+		C_HL2MP_Player *pPlayer = C_HL2MP_Player::GetLocalHL2MPPlayer();
+		if ( !pPlayer || event->GetInt( "userid" ) != pPlayer->GetUserID() )
+			return;
+
+		// The networked best lap may arrive before or after the event, so
+		// compare with the best this element has seen itself.
+		float flLapTime = event->GetFloat( "laptime" );
+		if ( m_flBestSeen <= 0.0f || flLapTime < m_flBestSeen )
+		{
+			m_flBestSeen = flLapTime;
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence( "KartTimerBestLap" );
+		}
+	}
+
+	virtual void OnThink( void )
+	{
+		// A new race: its first lap is a new best again.
+		C_HL2MP_Player *pPlayer = C_HL2MP_Player::GetLocalHL2MPPlayer();
+		if ( pPlayer && pPlayer->GetKartLap() == 0 )
+		{
+			m_flBestSeen = 0.0f;
+		}
+	}
+
+	virtual void ApplySchemeSettings( IScheme *pScheme )
+	{
+		BaseClass::ApplySchemeSettings( pScheme );
+
+		m_hFont = GetKartFont( pScheme, "KartHudSmall" );
+		m_LabelColor = GetKartColor( pScheme, "KartAmberDim" );
+		m_TimeColor = GetKartColor( pScheme, "KartWhite" );
+		m_FinalColor = GetKartColor( pScheme, "KartAmber" );
+	}
+
+	virtual void Paint( void )
+	{
+		C_HL2MP_Player *pPlayer = C_HL2MP_Player::GetLocalHL2MPPlayer();
+		if ( !pPlayer )
+			return;
+
+		bool bFinished = pPlayer->IsKartFinished();
+		float flLap = bFinished ? 0.0f : MAX( 0.0f, gpGlobals->curtime - pPlayer->GetKartLapStartTime() );
+		float flTotal = pPlayer->GetKartTotalTime() + flLap;
+		float flBest = pPlayer->GetKartBestLap();
+
+		int nRowTall = surface()->GetFontTall( m_hFont );
+		int y = 0;
+
+		PaintRow( y, L"TOTAL", flTotal, bFinished ? m_FinalColor : m_TimeColor );
+		y += nRowTall;
+
+		if ( !bFinished )
+		{
+			PaintRow( y, L"LAP", flLap, m_TimeColor );
+			y += nRowTall;
+		}
+
+		// The flash: the row lerps to amber and back with BestFlash.
+		Color bestColor = m_TimeColor;
+		float flFlash = clamp( m_flBestFlash, 0.0f, 1.0f );
+		for ( int i = 0; i < 4; i++ )
+		{
+			bestColor[i] = Lerp( flFlash, m_TimeColor[i], m_FinalColor[i] );
+		}
+		PaintRow( y, L"BEST", flBest, bestColor );
+	}
+
+private:
+	// "LABEL  mm:ss.mmm", right-aligned on the panel; times of 0 or less are
+	// drawn as "--:--.---".
+	void PaintRow( int y, const wchar_t *pszLabel, float flTime, Color timeColor )
+	{
+		wchar_t wszTime[32];
+		FormatTime( flTime, wszTime, ARRAYSIZE( wszTime ) );
+
+		int nTimeWide, nTimeTall, nLabelWide, nLabelTall;
+		surface()->GetTextSize( m_hFont, wszTime, nTimeWide, nTimeTall );
+		surface()->GetTextSize( m_hFont, pszLabel, nLabelWide, nLabelTall );
+
+		// The labels end where a typical time starts, so they line up.
+		int nColumnWide, nColumnTall;
+		surface()->GetTextSize( m_hFont, L"00:00.000", nColumnWide, nColumnTall );
+
+		int nTimeX = GetWide() - nTimeWide;
+		int nLabelX = GetWide() - nColumnWide - m_nLabelGap - nLabelWide;
+
+		KartHud_DrawText( m_hFont, m_LabelColor, nLabelX, y, pszLabel );
+		KartHud_DrawText( m_hFont, timeColor, nTimeX, y, wszTime );
+	}
+
+	static void FormatTime( float flTime, wchar_t *pwszOut, int nOutChars )
+	{
+		if ( flTime <= 0.0f )
+		{
+			V_wcsncpy( pwszOut, L"--:--.---", nOutChars * sizeof( wchar_t ) );
+			return;
+		}
+
+		int nMillis = (int)( flTime * 1000.0f + 0.5f );
+		V_snwprintf( pwszOut, nOutChars, L"%02d:%02d.%03d", nMillis / 60000, ( nMillis / 1000 ) % 60, nMillis % 1000 );
+	}
+
+	// Animated by KartTimerBestLap: 1 is the BEST row in amber.
+	CPanelAnimationVar( float, m_flBestFlash, "BestFlash", "0" );
+
+	// Gap between the labels and the times.
+	CPanelAnimationVarAliasType( int, m_nLabelGap, "label_gap", "4", "proportional_int" );
+
+	// Fastest lap seen in kart_lap events this race, 0 before the first.
+	float	m_flBestSeen;
+
+	HFont	m_hFont;
+	Color	m_LabelColor;
+	Color	m_TimeColor;
+	Color	m_FinalColor;
+};
+
+DECLARE_HUDELEMENT( CKartTimer );

@@ -18,6 +18,24 @@
 
 ConVar kart_debug_server( "kart_debug_server", "0", 0, "1: draw kart race checkpoints, the finish line, grid slots and each kart model's attachments with debug overlays, and log checkpoint touches. 2: also draw the bots' racing line." );
 
+ConVar kart_wrongway_time( "kart_wrongway_time", "1", FCVAR_NOTIFY, "Seconds a kart has to face or drive against the track before it is told it is going the wrong way.", true, 0, false, 0 );
+
+// Seconds a wrong-way kart has to face forward again before the warning clears.
+#define KART_WRONGWAY_CLEAR_TIME	0.5f
+
+// A kart facing more than ~100 degrees off the track is against it, one within
+// ~80 degrees with it; in between the wrong-way state is kept (hysteresis).
+#define KART_WRONGWAY_AGAINST_COS	-0.17f
+#define KART_WRONGWAY_FORWARD_COS	0.17f
+
+// Driving backwards along the track faster than this (u/s) counts as against it,
+// whichever way the kart faces.
+#define KART_WRONGWAY_BACKWARD_SPEED	100.0f
+
+// How far below a checkpoint's center (beyond half its height) a respawn looks
+// for the ground.
+#define KART_RESPAWN_GROUND_DEPTH	128.0f
+
 // How often the debug overlays are redrawn, in seconds.
 #define KART_DEBUG_DRAW_INTERVAL	0.25f
 
@@ -85,11 +103,21 @@ LINK_ENTITY_TO_CLASS( kart_finish, CKartFinish );
 
 BEGIN_DATADESC( CKartCheckpoint )
 	DEFINE_KEYFIELD( m_iIndex, FIELD_INTEGER, "index" ),
+	DEFINE_KEYFIELD( m_iszRespawnTarget, FIELD_STRING, "respawn_target" ),
 END_DATADESC()
 
 CKartCheckpoint::CKartCheckpoint()
 {
 	m_iIndex = -1;
+	m_iszRespawnTarget = NULL_STRING;
+}
+
+CBaseEntity *CKartCheckpoint::GetRespawnTarget( void )
+{
+	if ( !HasRespawnTargetName() )
+		return NULL;
+
+	return gEntList.FindEntityByName( NULL, m_iszRespawnTarget );
 }
 
 void CKartCheckpoint::Spawn( void )
@@ -124,6 +152,35 @@ void CKartFinish::Spawn( void )
 	m_iIndex = KART_FINISH_INDEX;
 
 	BaseClass::Spawn();
+}
+
+// ##################################################################################
+//	>> kart_respawn_zone
+// ##################################################################################
+LINK_ENTITY_TO_CLASS( kart_respawn_zone, CKartRespawnZone );
+
+void CKartRespawnZone::Spawn( void )
+{
+	// Only players pass; StartTouch narrows that down to karts.
+	AddSpawnFlags( SF_TRIGGER_ALLOW_CLIENTS );
+
+	BaseClass::Spawn();
+
+	InitTrigger();
+}
+
+void CKartRespawnZone::StartTouch( CBaseEntity *pOther )
+{
+	BaseClass::StartTouch( pOther );
+
+	if ( !pOther->IsPlayer() || !PassesTriggerFilters( pOther ) )
+		return;
+
+	CHL2MP_Player *pPlayer = ToHL2MPPlayer( pOther );
+	if ( pPlayer && pPlayer->IsInKart() )
+	{
+		pPlayer->KartRespawnAtCheckpoint();
+	}
 }
 
 // ##################################################################################
@@ -214,6 +271,7 @@ LINK_ENTITY_TO_CLASS( kart_race_manager, CKartRaceManager );
 BEGIN_DATADESC( CKartRaceManager )
 	DEFINE_KEYFIELD( m_iLaps, FIELD_INTEGER, "laps" ),
 	DEFINE_KEYFIELD( m_iszTrackName, FIELD_STRING, "track_name" ),
+	DEFINE_KEYFIELD( m_iszKillZ, FIELD_STRING, "kill_z" ),
 
 	DEFINE_THINKFUNC( RaceThink ),
 
@@ -225,6 +283,9 @@ CKartRaceManager::CKartRaceManager()
 {
 	m_iLaps = 3;
 	m_iszTrackName = NULL_STRING;
+	m_iszKillZ = NULL_STRING;
+	m_bHasKillZ = false;
+	m_flKillZ = 0.0f;
 	m_bSomeoneFinished = false;
 }
 
@@ -260,6 +321,13 @@ void CKartRaceManager::Spawn( void )
 	{
 		Warning( "[kart] kart_race_manager laps %d is more than %d, using %d.\n", m_iLaps, KART_MAX_LAPS, KART_MAX_LAPS );
 		m_iLaps = KART_MAX_LAPS;
+	}
+
+	// Empty means no kill height: only kart_respawn_zone triggers respawn karts.
+	m_bHasKillZ = ( m_iszKillZ != NULL_STRING && STRING( m_iszKillZ )[0] != '\0' );
+	if ( m_bHasKillZ )
+	{
+		m_flKillZ = atof( STRING( m_iszKillZ ) );
 	}
 
 	if ( HL2MPRules() )
@@ -323,6 +391,7 @@ void CKartRaceManager::CollectCheckpoints( void )
 
 		RoutePoint_t &point = m_Route[m_Route.AddToTail()];
 		point.index = index;
+		point.hTrigger = list[i];
 		point.center = list[i]->WorldSpaceCenter();
 		point.dir.Init();
 		point.length = 0.0f;
@@ -556,6 +625,76 @@ void CKartRaceManager::RaceThink( void )
 	}
 
 	UpdatePositions();
+	CheckKillZ();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Every kart that has fallen below kill_z goes back to its last
+//			checkpoint. Late joiners and free drive too: anyone in a kart.
+//-----------------------------------------------------------------------------
+void CKartRaceManager::CheckKillZ( void )
+{
+	if ( !m_bHasKillZ )
+		return;
+
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( !pPlayer || !pPlayer->IsInKart() || !pPlayer->IsAlive() || pPlayer->IsObserver() )
+			continue;
+
+		// Still frozen from a respawn: a respawn point below kill_z would loop.
+		if ( pPlayer->m_flKartRespawnUnfreezeTime > 0.0f )
+			continue;
+
+		if ( pPlayer->GetAbsOrigin().z < m_flKillZ )
+		{
+			pPlayer->KartRespawnAtCheckpoint();
+		}
+	}
+}
+
+bool CKartRaceManager::GetRespawnPoint( CHL2MP_Player *pPlayer, Vector &vecOrigin, QAngle &angFacing ) const
+{
+	if ( !HasRoute() )
+		return false;
+
+	// The last checkpoint hit is the one before the next. Before the first
+	// crossing of the line that is the last checkpoint of the lap, behind the grid.
+	const int nCount = m_Route.Count();
+	int iNext = RoutePosition( pPlayer->m_nKartNextCheckpoint );
+	if ( iNext < 0 )
+	{
+		iNext = 0;
+	}
+	const RoutePoint_t &last = m_Route[( iNext + nCount - 1 ) % nCount];
+	CKartCheckpoint *pTrigger = last.hTrigger.Get();
+
+	// A placed respawn point: its position and facing, as the mapper set them.
+	CBaseEntity *pTarget = pTrigger ? pTrigger->GetRespawnTarget() : NULL;
+	if ( pTarget )
+	{
+		vecOrigin = pTarget->GetAbsOrigin() + Vector( 0, 0, 1 );
+		angFacing = QAngle( 0, pTarget->GetAbsAngles()[YAW], 0 );
+		return true;
+	}
+
+	// Else on the ground under the trigger's center, raised 32 units when no
+	// ground is found (or the center is inside something).
+	Vector vecStart = last.center + Vector( 0, 0, 32 );
+	float flDepth = KART_RESPAWN_GROUND_DEPTH + 32.0f;
+	if ( pTrigger )
+	{
+		flDepth += pTrigger->CollisionProp()->OBBSize().z * 0.5f;
+	}
+
+	trace_t tr;
+	UTIL_TraceHull( vecStart, vecStart - Vector( 0, 0, flDepth ), pPlayer->GetPlayerMins(), pPlayer->GetPlayerMaxs(),
+		MASK_PLAYERSOLID, pPlayer, COLLISION_GROUP_PLAYER_MOVEMENT, &tr );
+	vecOrigin = ( !tr.startsolid && tr.fraction < 1.0f ) ? tr.endpos + Vector( 0, 0, 1 ) : vecStart;
+
+	angFacing = QAngle( 0, UTIL_VecToYaw( m_Route[iNext].center - vecOrigin ), 0 );
+	return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -569,7 +708,11 @@ void CKartRaceManager::UpdateProgress( CHL2MP_Player *pPlayer )
 {
 	// Finishers keep the value FinishRace gave them; the dead keep their last.
 	if ( !HasRoute() || pPlayer->m_bKartFinished || !pPlayer->IsAlive() )
+	{
+		pPlayer->m_bKartWrongWay = false;
+		pPlayer->m_flKartWrongWayTime = 0.0f;
 		return;
+	}
 
 	const int nCount = m_Route.Count();
 	int iNext = RoutePosition( pPlayer->m_nKartNextCheckpoint );
@@ -587,6 +730,58 @@ void CKartRaceManager::UpdateProgress( CHL2MP_Player *pPlayer )
 	}
 
 	pPlayer->m_flKartProgress = pPlayer->m_nKartLap + ( iPrev + t ) / nCount;
+
+	UpdateWrongWay( pPlayer, iPrev );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Wrong way: while the race runs, a kart facing against the segment
+//			it is on (from the last checkpoint to the next) or driving
+//			backwards along it for kart_wrongway_time is going the wrong way.
+//			It clears once the kart has faced forward for
+//			KART_WRONGWAY_CLEAR_TIME. Sideways in between keeps the state, so
+//			it doesn't flicker in corners or against a wall.
+//-----------------------------------------------------------------------------
+void CKartRaceManager::UpdateWrongWay( CHL2MP_Player *pPlayer, int iSegment )
+{
+	if ( !HL2MPRules()->IsKartRaceRunning() || ( pPlayer->GetFlags() & FL_FROZEN ) )
+	{
+		pPlayer->m_bKartWrongWay = false;
+		pPlayer->m_flKartWrongWayTime = 0.0f;
+		return;
+	}
+
+	Vector2D vecTrack = m_Route[iSegment].dir.AsVector2D();
+	if ( Vector2DNormalize( vecTrack ) < 0.01f )
+		return;
+
+	float flYaw = DEG2RAD( pPlayer->GetKartYaw() );
+	float flFacing = DotProduct2D( Vector2D( cosf( flYaw ), sinf( flYaw ) ), vecTrack );
+	float flTrackSpeed = DotProduct2D( pPlayer->GetAbsVelocity().AsVector2D(), vecTrack );
+
+	bool bBackward = flTrackSpeed < -KART_WRONGWAY_BACKWARD_SPEED;
+	bool bAgainst = bBackward || flFacing < KART_WRONGWAY_AGAINST_COS;
+	bool bForward = !bBackward && flFacing > KART_WRONGWAY_FORWARD_COS;
+
+	bool bFlip = pPlayer->m_bKartWrongWay ? bForward : bAgainst;
+	if ( !bFlip )
+	{
+		pPlayer->m_flKartWrongWayTime = 0.0f;
+		return;
+	}
+
+	pPlayer->m_flKartWrongWayTime += TICK_INTERVAL;
+	float flNeeded = pPlayer->m_bKartWrongWay ? KART_WRONGWAY_CLEAR_TIME : kart_wrongway_time.GetFloat();
+	if ( pPlayer->m_flKartWrongWayTime < flNeeded )
+		return;
+
+	pPlayer->m_bKartWrongWay = !pPlayer->m_bKartWrongWay;
+	pPlayer->m_flKartWrongWayTime = 0.0f;
+
+	if ( kart_debug_server.GetBool() )
+	{
+		Msg( "[kart] %s %s at %.2f\n", pPlayer->GetPlayerName(), pPlayer->m_bKartWrongWay ? "is going the wrong way" : "is going the right way again", gpGlobals->curtime );
+	}
 }
 
 // Finishers first, by finish time, then everyone else by progress. Karts
@@ -729,6 +924,15 @@ void KartRace_ValidateMap( void )
 		}
 
 		iExpected = index + 1;
+	}
+
+	for ( int i = 0; i < checkpoints.Count(); i++ )
+	{
+		if ( checkpoints[i]->HasRespawnTargetName() && !checkpoints[i]->GetRespawnTarget() )
+		{
+			Warning( "[kart] %s '%s' respawn_target '%s' doesn't exist; karts respawn at its center.\n",
+				checkpoints[i]->GetClassname(), checkpoints[i]->GetDebugName(), checkpoints[i]->GetRespawnTargetName() );
+		}
 	}
 
 	if ( nFinish == 0 )
