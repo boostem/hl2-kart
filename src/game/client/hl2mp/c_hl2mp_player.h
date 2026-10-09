@@ -14,6 +14,8 @@ class C_HL2MP_Player;
 #include "hl2mp_player_shared.h"
 #include "beamdraw.h"
 
+class CSoundPatch;
+
 //=============================================================================
 //=============================================================================
 class CSuitPowerDevice
@@ -126,6 +128,10 @@ public:
 	// In kart mode: locks the view to the kart heading and strips non-kart input.
 	virtual bool CreateMove( float flInputSampleTime, CUserCmd *pCmd ) OVERRIDE;
 
+	// Kart engine loops, created on the client for every kart player in PVS.
+	void UpdateKartSounds( void );
+	void StopKartSounds( void );
+
 	virtual void PostThink( void );
 
 private:
@@ -176,6 +182,10 @@ private:
 	float	m_flKartSpeed;		// forward speed along the kart's yaw, u/s
 	float	m_flKartYaw;		// heading of the kart body, degrees
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
+
+	CSoundPatch	*m_pKartEngineIdle;
+	CSoundPatch	*m_pKartEngineRev;
+	float	m_flKartSoundLastSpeed;	// |m_flKartSpeed| at the last think, for remote throttle
 };
 
 inline C_HL2MP_Player *ToHL2MPPlayer( CBaseEntity *pEntity )
