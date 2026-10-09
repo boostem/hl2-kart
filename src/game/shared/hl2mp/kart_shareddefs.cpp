@@ -11,7 +11,7 @@
 #include "tier0/memdbgon.h"
 
 ConVar kart_enabled( "kart_enabled", "1", FCVAR_REPLICATED | FCVAR_NOTIFY, "Players spawn as karts instead of HL2DM characters. Takes effect on respawn." );
-ConVar kart_model( "kart_model", KART_DEFAULT_MODEL, FCVAR_REPLICATED | FCVAR_NOTIFY, "Kart model, e.g. " KART_PLACEHOLDER_MODEL ". Takes effect on respawn. A model not precached at map start (set it before the map loads) falls back to " KART_DEFAULT_MODEL "." );
+ConVar kart_model( "kart_model", KART_DEFAULT_MODEL, FCVAR_REPLICATED | FCVAR_NOTIFY, "Kart model, e.g. " KART_SCRAP_MODEL " or " KART_PLACEHOLDER_MODEL ". Takes effect on respawn. A model not precached at map start (set it before the map loads) falls back to " KART_DEFAULT_MODEL "." );
 
 // Movement tuning (defaults duplicated in cfg/kart_tuning.cfg, which the server execs at map start).
 #define KART_TUNING_FLAGS	( FCVAR_REPLICATED | FCVAR_NOTIFY )
@@ -45,8 +45,8 @@ ConVar kart_bump_cooldown( "kart_bump_cooldown", "0.3", KART_TUNING_FLAGS, "Mini
 ConVar kart_hop_velocity( "kart_hop_velocity", "160", KART_TUNING_FLAGS, "Upward speed of the kart's hop (jump tapped on the ground), in units per second." );
 ConVar kart_drift_min_speed( "kart_drift_min_speed", "250", KART_TUNING_FLAGS, "Below this forward speed (units per second) the kart cannot drift, and a drift ends." );
 ConVar kart_drift_slip_angle( "kart_drift_slip_angle", "25", KART_TUNING_FLAGS, "Degrees the kart's nose points into the turn past its direction of travel while drifting." );
-ConVar kart_drift_turn_min( "kart_drift_turn_min", "40", KART_TUNING_FLAGS, "Drift turn rate while steering against the drift (widest line), in degrees per second." );
-ConVar kart_drift_turn_max( "kart_drift_turn_max", "160", KART_TUNING_FLAGS, "Drift turn rate while steering into the drift (tightest line), in degrees per second." );
+ConVar kart_drift_turn_min( "kart_drift_turn_min", "45", KART_TUNING_FLAGS, "Drift turn rate while steering against the drift (widest line), in degrees per second." );
+ConVar kart_drift_turn_max( "kart_drift_turn_max", "105", KART_TUNING_FLAGS, "Drift turn rate while steering into the drift (tightest line), in degrees per second." );
 ConVar kart_drift_slip_rate( "kart_drift_slip_rate", "90", KART_TUNING_FLAGS, "How fast the slip angle builds up in a drift and straightens out after it, in degrees per second." );
 
 const color32 g_KartColors[KART_COLOR_COUNT] =

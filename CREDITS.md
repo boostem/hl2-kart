@@ -6,6 +6,7 @@ Every non-Valve asset in this repository must have a row in the table below.
 | --- | --- | --- | --- | --- |
 | `example/path/asset.ext` (EXAMPLE, not a real asset) | Example asset | Example Author | https://example.com/asset | CC0 |
 | `game/mod_hl2mp/models/kart/kart_scrap.*`, `game/mod_hl2mp/materials/models/kart/kart_scrap.*`, `assets_src/kart_scrap/` | Scrap kart model and texture: original, made for this mod by `build_kart_scrap.py` | HL2 Kart (the mod) | - | To be decided in M9 |
+| `game/mod_hl2mp/models/kart/kart_racer.*`, `game/mod_hl2mp/materials/models/kart/kart_racer.*`, `assets_src/kart_racer/` | Racer kart model and texture: original, made for this mod by `build_kart_racer.py` | HL2 Kart (the mod) | - | To be decided in M9 |
 
 ## Tools
 
