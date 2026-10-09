@@ -60,8 +60,12 @@ Attach the PNGs to the ticket; don't commit them.
 
 ## Models
 
-- `assets_src/kart_scrap/`: the scrap kart (`models/kart/kart_scrap.mdl`), the default `kart_model`. About 112 x 70 x
-  50, ~3300 triangles, one 512 texture baked from procedural materials and AO in Cycles. Attachments `wheel_fl`,
+- `assets_src/kart_racer/`: the racer kart (`models/kart/kart_racer.mdl`), the default `kart_model`: a cartoon racer
+  go-kart with a rounded tub, wide bumpers, fat tyres, a rear engine with twin pipes and a wing. About 123 x 71 x 43,
+  ~5100 triangles, near-white paint so `cl_kart_color` tints it. Same attachments, texture bake and build steps as
+  the scrap kart below, with `kart_racer` for `kart_scrap`.
+- `assets_src/kart_scrap/`: the scrap kart (`models/kart/kart_scrap.mdl`), the earlier default, still available as
+  `kart_model models/kart/kart_scrap.mdl`. About 112 x 70 x 50, ~3300 triangles, one 512 texture baked from procedural materials and AO in Cycles. Attachments `wheel_fl`,
   `wheel_fr`, `wheel_rl`, `wheel_rr` (tyre contact patches on the floor), `exhaust` (pointing out of the pipe),
   `vehicle_driver_eyes` and `item_hold` (behind the kart). `kart_debug_server 1` draws them in game. Rebuild:
 

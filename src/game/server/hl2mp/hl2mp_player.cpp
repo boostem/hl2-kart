@@ -251,6 +251,7 @@ void CHL2MP_Player::Precache( void )
 	   	 PrecacheModel( g_ppszRandomCombineModels[i] );
 
 	PrecacheModel( KART_DEFAULT_MODEL );
+	PrecacheModel( KART_SCRAP_MODEL );
 	PrecacheModel( KART_PLACEHOLDER_MODEL );
 	if ( kart_model.GetString()[0] )
 	{
