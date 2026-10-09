@@ -121,3 +121,13 @@
 
 	"wave"			"ambient/machines/thumper_hit.wav"
 }
+
+// Nitro Can use
+"Kart.Nitro"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_80dB"
+
+	"wave"			"vehicles/v8/v8_turbo_on_loop1.wav"
+}

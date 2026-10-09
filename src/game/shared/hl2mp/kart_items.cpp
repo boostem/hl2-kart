@@ -18,6 +18,7 @@
 
 #ifdef GAME_DLL
 static bool KartItemUse_Stub( CHL2MP_Player *pPlayer, bool bBackward );
+static bool KartItemUse_Nitro( CHL2MP_Player *pPlayer, bool bBackward );
 #define KART_ITEM_USE( fn )	, fn
 #else
 #define KART_ITEM_USE( fn )
@@ -35,7 +36,7 @@ const KartItemInfo_t g_KartItems[KART_ITEM_COUNT] =
 	{ "none",			"None",			false,		{  0,  0,  0,  0 },					{ 0, 0, 0, 0 }	KART_ITEM_USE( NULL ) },
 	{ "hubcap",			"Hubcap",		true,		{ 30, 35, 25, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
 	{ "oil_slick",		"Oil Slick",	true,		{ 45, 25, 10,  5 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
-	{ "nitro_can",		"Nitro Can",	false,		{  0, 15, 30, 35 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
+	{ "nitro_can",		"Nitro Can",	false,		{  0, 15, 30, 35 },					{ 1, 1, 2, 3 }	KART_ITEM_USE( KartItemUse_Nitro ) },
 	{ "seeker",			"Seeker",		false,		{  0, 15, 25, 30 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
 	{ "buffer",			"Buffer",		false,		{ 25, 10, 10, 20 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
 };
@@ -177,6 +178,17 @@ ConVar kart_item_roulette_time( "kart_item_roulette_time", "1.5", 0, "Seconds th
 static bool KartItemUse_Stub( CHL2MP_Player *pPlayer, bool bBackward )
 {
 	Msg( "[kart] %s used %s%s (stub, not implemented yet)\n", pPlayer->GetPlayerName(), KartItem_GetName( pPlayer->GetKartItem() ), bBackward ? " backward" : "" );
+	return true;
+}
+
+ConVar kart_nitro_duration( "kart_nitro_duration", "1.2", FCVAR_NOTIFY, "Seconds of boost per Nitro Can charge.", true, 0.0f, true, 10.0f );
+ConVar kart_nitro_scale( "kart_nitro_scale", "1.5", FCVAR_NOTIFY, "Speed scale of the Nitro Can boost.", true, 1.0f, true, 5.0f );
+
+// Nitro Can: an instant boost, one per charge.
+static bool KartItemUse_Nitro( CHL2MP_Player *pPlayer, bool bBackward )
+{
+	pPlayer->KartGiveBoost( kart_nitro_duration.GetFloat(), kart_nitro_scale.GetFloat() );
+	pPlayer->EmitSound( "Kart.Nitro" );
 	return true;
 }
 
