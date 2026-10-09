@@ -18,9 +18,13 @@
 #include "gamerules.h"
 #include "teamplay_gamerules.h"
 #include "gamevars_shared.h"
+#include "kart_shareddefs.h"
+#include "kart_race_shared.h"
 
 #ifndef CLIENT_DLL
 #include "hl2mp_player.h"
+
+class CHL2MP_Player;
 #endif
 
 #define VEC_CROUCH_TRACE_MIN	HL2MPRules()->GetHL2MPViewVectors()->m_vCrouchTraceMin
@@ -149,10 +153,29 @@ public:
 	void PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &info );
 
 	
-	bool	IsTeamplay( void ) { return m_bTeamPlayEnabled;	}
+	// Karts race everyone against everyone: no teams in kart mode.
+	bool	IsTeamplay( void ) { return m_bTeamPlayEnabled && !kart_enabled.GetBool(); }
 	void	CheckAllPlayersReady( void );
 
 	virtual bool IsConnectedUserInfoChangeAllowed( CBasePlayer *pPlayer );
+
+	// Kart race flow (see KartRaceState_t). Runs instead of deathmatch on a map
+	// with a kart_race_manager and a route; NONE elsewhere (free drive).
+	KartRaceState_t GetKartRaceState( void ) const { return (KartRaceState_t)m_nKartRaceState.Get(); }
+	float GetKartStateEndTime( void ) const { return m_flKartStateEndTime; }
+	// Karts are held still: on the grid during the countdown, and at the results.
+	bool IsKartRaceFrozen( void ) const;
+	// A race is running: checkpoints and laps count.
+	bool IsKartRaceRunning( void ) const;
+
+#ifndef CLIENT_DLL
+	// kart_race_flow.cpp
+	void OnKartSpawned( CHL2MP_Player *pPlayer );
+	void OnKartFinished( CHL2MP_Player *pPlayer );
+	void OnKartRaceReset( void );
+	// kart_race_restart: a new race from WAITING, on a clean map and the grid.
+	bool RequestKartRaceRestart( void );
+#endif
 
 	// Kart race: laps in the race (0 without a kart_race_manager) and how many
 	// karts are racing. Set by the race manager, read by the HUD.
@@ -164,6 +187,24 @@ public:
 #endif
 	
 private:
+
+#ifndef CLIENT_DLL
+	void KartRaceThink( void );
+	void KartSetState( KartRaceState_t state, float flEndTime );
+	void KartNewRace( KartRaceState_t state );
+	void KartStartRace( void );
+	void KartMarkInRace( void );
+	void KartShowResults( void );
+	int KartCountRacers( int *pnFinished = NULL, bool *pbAllReady = NULL );
+	void KartGetGridOrder( CUtlVector< CHL2MP_Player * > &order );
+
+	int m_iKartCountdownTick;			// last countdown second announced
+	bool m_bKartRestartPending;			// kart_race_restart, done on the next think
+	CUtlVector< int > m_KartGridOrder;	// userids by the last race's finish order
+#endif
+
+	CNetworkVar( int, m_nKartRaceState );
+	CNetworkVar( float, m_flKartStateEndTime );
 	
 	CNetworkVar( bool, m_bTeamPlayEnabled );
 	CNetworkVar( int, m_nKartLaps );

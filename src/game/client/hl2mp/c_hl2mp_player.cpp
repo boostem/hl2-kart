@@ -94,6 +94,7 @@ IMPLEMENT_CLIENTCLASS_DT(C_HL2MP_Player, DT_HL2MP_Player, CHL2MP_Player)
 	RecvPropTime( RECVINFO( m_flKartLapStartTime ) ),
 	RecvPropFloat( RECVINFO( m_flKartBestLap ) ),
 	RecvPropFloat( RECVINFO( m_flKartTotalTime ) ),
+	RecvPropBool( RECVINFO( m_bKartLateJoin ) ),
 
 	RecvPropInt( RECVINFO( m_nKartItem ) ),
 	RecvPropInt( RECVINFO( m_nKartItemCount ) ),
@@ -191,6 +192,7 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_flKartLapStartTime = 0.0f;
 	m_flKartBestLap = 0.0f;
 	m_flKartTotalTime = 0.0f;
+	m_bKartLateJoin = false;
 
 	m_nKartItem = 0;
 	m_nKartItemCount = 0;

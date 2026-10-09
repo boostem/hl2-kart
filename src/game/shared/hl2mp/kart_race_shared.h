@@ -22,6 +22,17 @@
 //			total time		sum of the completed lap times; the final race
 //							time once finished. The running race time is
 //							total time + ( curtime - lap start time ).
+//			late join		joined while a race was running: drives, but has
+//							no position and no laps until the next race.
+//
+//			Race flow, networked on the game rules (CHL2MPRules):
+//
+//			race state		see KartRaceState_t.
+//			state end time	server time the current state ends (WAITING:
+//							when the countdown starts, 0 while it waits for
+//							karts; COUNTDOWN: GO; RACING: 0; FINISHING: when
+//							the karts still racing are finished for them;
+//							RESULTS: when the next race starts).
 //
 //=============================================================================//
 
@@ -49,10 +60,33 @@
 #define KART_NET_PROGRESS_BITS		16
 #define KART_NET_PROGRESS_MAX		( KART_MAX_LAPS + 1.0f )
 
+// Race flow states. NONE: no race runs (not kart mode, or a map without a
+// kart_race_manager and a route): free drive.
+enum KartRaceState_t
+{
+	KART_RACE_STATE_NONE = 0,
+	KART_RACE_STATE_WAITING,	// karts drive freely, laps aren't counted; waits for kart_min_players or everyone ready
+	KART_RACE_STATE_COUNTDOWN,	// karts frozen on the grid for kart_countdown_time
+	KART_RACE_STATE_RACING,		// laps count
+	KART_RACE_STATE_FINISHING,	// someone finished; the rest have kart_finish_timeout to
+	KART_RACE_STATE_RESULTS,	// karts frozen for kart_results_time, then the next race or the next map
+
+	KART_RACE_STATE_COUNT
+};
+#define KART_NET_RACE_STATE_BITS	3
+
+inline const char *KartRaceStateName( int state )
+{
+	static const char *s_pszNames[KART_RACE_STATE_COUNT] = { "none", "waiting", "countdown", "racing", "finishing", "results" };
+	return ( state >= 0 && state < KART_RACE_STATE_COUNT ) ? s_pszNames[state] : "?";
+}
+
 // Game events (modevents.res).
 #define KART_EVENT_CHECKPOINT		"kart_checkpoint"	// userid, index
 #define KART_EVENT_LAP				"kart_lap"			// userid, lap, laptime
-#define KART_EVENT_RACE_FINISH		"kart_race_finish"	// userid, position, totaltime
+#define KART_EVENT_RACE_FINISH		"kart_race_finish"	// userid, position, totaltime, dnf
+#define KART_EVENT_COUNTDOWN		"kart_countdown"	// seconds (3, 2, 1)
+#define KART_EVENT_RACE_START		"kart_race_start"	// laps
 
 // Game sounds (game_sounds_kart.txt), played to the player only.
 #define KART_SOUND_CHECKPOINT		"Kart.Checkpoint"
