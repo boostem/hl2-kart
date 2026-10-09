@@ -12,6 +12,8 @@
 #include "hl2mp_gamerules.h"
 #include "kart_shareddefs.h"
 #include "in_buttons.h"
+#include "input.h"
+#include "model_types.h"
 #include "iviewrender_beams.h"			// flashlight beam
 #include "r_efx.h"
 #include "dlight.h"
@@ -30,6 +32,14 @@ ConVar sv_infinite_aux_power( "sv_infinite_aux_power", "0", FCVAR_CHEAT | FCVAR_
 
 ConVar kart_engine_pitch_min( "kart_engine_pitch_min", "85", FCVAR_ARCHIVE, "Kart engine loop pitch at a standstill (percent)." );
 ConVar kart_engine_pitch_max( "kart_engine_pitch_max", "170", FCVAR_ARCHIVE, "Kart engine loop pitch at kart_max_speed (percent)." );
+
+// Chase camera. Client only: the camera never feeds back into movement.
+ConVar kart_cam_dist( "kart_cam_dist", "220", FCVAR_ARCHIVE, "Kart chase camera distance behind the kart." );
+ConVar kart_cam_height( "kart_cam_height", "70", FCVAR_ARCHIVE, "Kart chase camera height above the look-at point." );
+ConVar kart_cam_target_height( "kart_cam_target_height", "30", FCVAR_ARCHIVE, "Height of the chase camera's look-at point above the kart origin." );
+ConVar kart_cam_follow( "kart_cam_follow", "6", FCVAR_ARCHIVE, "How quickly the chase camera swings in behind the kart in turns. Higher is stiffer." );
+ConVar kart_cam_fov( "kart_cam_fov", "95", FCVAR_ARCHIVE, "Kart chase camera field of view." );
+ConVar kart_cam_min_dist( "kart_cam_min_dist", "80", FCVAR_ARCHIVE, "Hide the local kart when a wall pulls the chase camera closer than this to it." );
 
 LINK_ENTITY_TO_CLASS( player, C_HL2MP_Player );
 
@@ -132,6 +142,10 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_pKartEngineIdle = NULL;
 	m_pKartEngineRev = NULL;
 	m_flKartSoundLastSpeed = 0.0f;
+
+	m_flKartCamYaw = 0.0f;
+	m_bKartCamActive = false;
+	m_bKartCamTooClose = false;
 
 	AddVar( &m_angEyeAngles, &m_iv_angEyeAngles, LATCH_SIMULATION_VAR );
 
@@ -431,6 +445,12 @@ void C_HL2MP_Player::StopKartSounds( void )
 int C_HL2MP_Player::DrawModel( int flags )
 {
 	if ( !m_bReadyToDraw )
+		return 0;
+
+	// The chase camera was pulled into the kart by a wall: don't draw it from
+	// inside. Checked per draw rather than in ShouldDraw, which is cached in the
+	// leaf system. Its shadows still render.
+	if ( m_bKartCamTooClose && IsLocalPlayer() && !( flags & STUDIO_SHADOWDEPTHTEXTURE ) )
 		return 0;
 
     return BaseClass::DrawModel(flags);
@@ -1047,6 +1067,16 @@ C_BaseAnimating *C_HL2MP_Player::BecomeRagdollOnClient()
 
 void C_HL2MP_Player::CalcView( Vector &eyeOrigin, QAngle &eyeAngles, float &zNear, float &zFar, float &fov )
 {
+	if ( IsInKart() && IsAlive() && !IsObserver() )
+	{
+		BaseClass::CalcView( eyeOrigin, eyeAngles, zNear, zFar, fov );
+		CalcKartView( eyeOrigin, eyeAngles, fov );
+		return;
+	}
+
+	m_bKartCamActive = false;
+	m_bKartCamTooClose = false;
+
 	if ( m_lifeState != LIFE_ALIVE && !IsObserver() )
 	{
 		Vector origin = EyePosition();			
@@ -1086,6 +1116,70 @@ void C_HL2MP_Player::CalcView( Vector &eyeOrigin, QAngle &eyeAngles, float &zNea
 	}
 
 	BaseClass::CalcView( eyeOrigin, eyeAngles, zNear, zFar, fov );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Chase camera behind and above the kart. It looks at a point above the
+//			kart's origin (smoothed like the first-person eye, so prediction
+//			corrections don't jerk it) from kart_cam_dist behind the kart's
+//			heading. The camera heading lags the predicted kart heading in turns
+//			(the TF2 halloween kart formula: the bigger the gap, the faster it
+//			closes) and +lookback flips it with no lag while held. A hull trace
+//			toward the camera keeps it out of walls: it slides in toward the kart.
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::CalcKartView( Vector &eyeOrigin, QAngle &eyeAngles, float &fov )
+{
+	Vector vecSmooth;
+	GetPredictionErrorSmoothingVector( vecSmooth );
+	Vector vecTarget = GetAbsOrigin() + Vector( 0.0f, 0.0f, kart_cam_target_height.GetFloat() ) + vecSmooth;
+
+	if ( !m_bKartCamActive )
+	{
+		m_flKartCamYaw = m_flKartYaw;
+		m_bKartCamActive = true;
+	}
+	else
+	{
+		float flDelta = AngleDiff( m_flKartYaw, m_flKartCamYaw );
+		float flGap = MAX( 2.0f, fabs( flDelta ) );
+		float flSpeed = gpGlobals->frametime * flGap * flGap * kart_cam_follow.GetFloat();
+		m_flKartCamYaw = AngleNormalize( m_flKartCamYaw + Approach( flDelta, 0.0f, flSpeed ) );
+	}
+
+	// The lagged heading keeps tracking while looking back, so letting go snaps
+	// straight back to where the camera would be.
+	float flCamYaw = m_flKartCamYaw;
+	if ( input->GetButtonBits( 0 ) & IN_LOOKBACK )
+	{
+		flCamYaw = AngleNormalize( m_flKartYaw + 180.0f );
+	}
+
+	Vector vecForward;
+	AngleVectors( QAngle( 0.0f, flCamYaw, 0.0f ), &vecForward );
+	Vector vecCamera = vecTarget - vecForward * kart_cam_dist.GetFloat() + Vector( 0.0f, 0.0f, kart_cam_height.GetFloat() );
+
+	Vector WALL_MIN( -WALL_OFFSET, -WALL_OFFSET, -WALL_OFFSET );
+	Vector WALL_MAX( WALL_OFFSET, WALL_OFFSET, WALL_OFFSET );
+
+	trace_t trace; // clip against world
+	C_BaseEntity::PushEnableAbsRecomputations( false ); // HACK don't recompute positions while doing RayTrace
+	UTIL_TraceHull( vecTarget, vecCamera, WALL_MIN, WALL_MAX, MASK_SOLID_BRUSHONLY, this, COLLISION_GROUP_NONE, &trace );
+	C_BaseEntity::PopEnableAbsRecomputations();
+
+	eyeOrigin = trace.endpos;
+
+	Vector vecLook = vecTarget - eyeOrigin;
+	m_bKartCamTooClose = vecLook.Length() < kart_cam_min_dist.GetFloat();
+	if ( vecLook.IsZero() )
+	{
+		// Trace started solid: look along the kart's heading.
+		vecLook = vecForward;
+	}
+
+	VectorAngles( vecLook, eyeAngles );
+	eyeAngles[ROLL] = 0.0f;
+
+	fov = kart_cam_fov.GetFloat();
 }
 
 IRagdoll* C_HL2MP_Player::GetRepresentativeRagdoll() const
@@ -1352,7 +1446,7 @@ bool C_HL2MP_Player::CreateMove( float flInputSampleTime, CUserCmd *pCmd )
 
 	if ( IsInKart() && IsAlive() && GetMoveType() == MOVETYPE_WALK )
 	{
-		pCmd->buttons &= ( IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP | IN_ATTACK | IN_ATTACK2 | IN_SCORE );
+		pCmd->buttons &= ( IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP | IN_ATTACK | IN_ATTACK2 | IN_SCORE | IN_LOOKBACK );
 		pCmd->weaponselect = 0;
 		pCmd->impulse = 0;
 		pCmd->viewangles.Init( 0.0f, m_flKartYaw, 0.0f );
