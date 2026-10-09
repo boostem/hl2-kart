@@ -65,6 +65,17 @@
 	"wave"			"items/suitchargeok1.wav"
 }
 
+// Item roulette, one tick per icon shown (CKartItemSlot, client only)
+"Kart.RouletteTick"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.5"
+	"soundlevel"	"SNDLVL_NONE"
+	"pitch"			"95,105"
+
+	"wave"			"buttons/lightswitch2.wav"
+}
+
 // Race feedback, played to the racing player only (CKartRaceManager)
 "Kart.Checkpoint"
 {

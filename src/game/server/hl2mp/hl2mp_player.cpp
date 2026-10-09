@@ -274,6 +274,7 @@ void CHL2MP_Player::Precache( void )
 	PrecacheScriptSound( "Kart.EngineRev" );
 	PrecacheScriptSound( "Kart.Skid" );
 	PrecacheScriptSound( "Kart.Impact" );
+	PrecacheScriptSound( "Kart.RouletteTick" );
 	PrecacheScriptSound( KART_SOUND_RESPAWN );
 }
 

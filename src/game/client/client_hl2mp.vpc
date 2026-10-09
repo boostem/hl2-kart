@@ -184,6 +184,7 @@ $Project "Client (HL2MP)"
 				$File	"hl2mp\hud_deathnotice.cpp"
 				$File	"hl2mp\kart_hud_base.cpp"
 				$File	"hl2mp\kart_hud_base.h"
+				$File	"hl2mp\kart_hud_item.cpp"
 				$File	"hl2mp\kart_hud_race.cpp"
 			}
 		}
