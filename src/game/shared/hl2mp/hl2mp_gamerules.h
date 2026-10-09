@@ -153,10 +153,21 @@ public:
 	void	CheckAllPlayersReady( void );
 
 	virtual bool IsConnectedUserInfoChangeAllowed( CBasePlayer *pPlayer );
+
+	// Kart race: laps in the race (0 without a kart_race_manager) and how many
+	// karts are racing. Set by the race manager, read by the HUD.
+	int		GetKartLaps( void ) const { return m_nKartLaps; }
+	int		GetKartRacers( void ) const { return m_nKartRacers; }
+#ifndef CLIENT_DLL
+	void	SetKartLaps( int nLaps ) { m_nKartLaps = nLaps; }
+	void	SetKartRacers( int nRacers ) { m_nKartRacers = nRacers; }
+#endif
 	
 private:
 	
 	CNetworkVar( bool, m_bTeamPlayEnabled );
+	CNetworkVar( int, m_nKartLaps );
+	CNetworkVar( int, m_nKartRacers );
 	CNetworkVar( float, m_flGameStartTime );
 	CUtlVector<EHANDLE> m_hRespawnableItemsAndWeapons;
 	float m_tmNextPeriodicThink;
