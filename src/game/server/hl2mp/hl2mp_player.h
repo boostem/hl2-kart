@@ -123,6 +123,16 @@ public:
 	float GetKartFinishTime( void ) const { return m_flKartFinishTime; }
 	void ResetKartRaceState( void );
 
+	// Kart item (see kart_items.h). Server-authoritative, not predicted.
+	int GetKartItem( void ) const { return m_nKartItem; }
+	int GetKartItemCount( void ) const { return m_nKartItemCount; }
+	int GetKartRouletteItem( void ) const { return m_nKartRouletteItem; }
+	float GetKartRouletteEnd( void ) const { return m_flKartRouletteEnd; }
+	bool IsKartRouletteSpinning( void ) const { return gpGlobals->curtime < m_flKartRouletteEnd; }
+	void KartGiveItem( int item, int nCount, float flRouletteTime );
+	void KartClearItem( void );
+	void KartUseItem( bool bBackward );
+
 	Activity TranslateTeamActivity( Activity ActToTranslate );
 	
 	float GetNextModelChangeTime( void ) { return m_flNextModelChangeTime; }
@@ -201,6 +211,14 @@ private:
 	CNetworkVar( float, m_flKartBestLap );
 	CNetworkVar( float, m_flKartTotalTime );
 	float m_flKartFinishTime;	// server time the player finished, orders the finishers
+
+	// Kart item state.
+	void KartItemPostThink( void );
+	CNetworkVar( int, m_nKartItem );			// KartItem_t, decided when the box is taken
+	CNetworkVar( int, m_nKartItemCount );		// uses left
+	CNetworkVar( int, m_nKartRouletteItem );	// what the roulette shows, display only
+	CNetworkVar( float, m_flKartRouletteEnd );	// server time the roulette stops
+	float m_flKartRouletteNextStep;				// server time the roulette shows the next item
 
 	float m_flNextModelChangeTime;
 	float m_flNextTeamChangeTime;

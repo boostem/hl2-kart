@@ -20,6 +20,8 @@ RAMP_SIDE = "concrete/concretewall004a"
 BANK = "concrete/concretefloor020a"
 NODRAW = "tools/toolsnodraw"
 SKY = "tools/toolsskybox"
+TRIGGER = "tools/toolstrigger"
+START_LINE = "dev/dev_hazzardstripe01a"
 
 HALF = 3072        # interior is 6144 x 6144 between the sky walls
 HEIGHT = 1024      # floor (z 0) to sky ceiling
@@ -29,6 +31,8 @@ INNER = HALF - SHELL   # drivable area is +-INNER
 ISLAND = 1792      # central island spans +-ISLAND
 LANE_MID = (INNER + ISLAND) // 2   # 2400, middle of each lane
 SINK = -16         # brushes that sit on the floor start this far into it, so no face is degenerate
+FINISH_X = -1536   # start/finish line across the south lane, near its west end
+TRIGGER_H = 512    # race triggers reach this high, well above the jump's arc
 
 
 class Map:
@@ -36,6 +40,7 @@ class Map:
         self.next_id = 1
         self.solids = []
         self.entities = []
+        self.target = self.solids   # where prism() and box() put their brushes
 
     def id(self):
         self.next_id += 1
@@ -45,7 +50,7 @@ class Map:
         """A convex brush: polygon `base` (x, y) counter-clockwise from above, from z0 up to a planar top.
 
         `top` is one height per base vertex (they must lie on a plane). `mats` maps "top", "bottom" and
-        "side" to materials."""
+        "side" to materials. Returns the side ids by kind ("side" is a list)."""
         n = len(base)
         bot = [(x, y, z0) for x, y in base]
         up = [(x, y, z) for (x, y), z in zip(base, top)]
@@ -55,13 +60,26 @@ class Map:
             faces.append(("side", [bot[i], bot[j], up[j], up[i]]))
         verts = bot + up
         centre = [sum(v[k] for v in verts) / len(verts) for k in range(3)]
-        self.solids.append((self.id(), [(mats[kind], loop) for kind, loop in faces], centre))
+        sid = self.id()
+        sides = [(self.id(), mats[kind], loop) for kind, loop in faces]
+        self.target.append((sid, sides, centre))
+        ids = {"bottom": sides[0][0], "top": sides[1][0], "side": [s[0] for s in sides[2:]]}
+        return ids
 
     def box(self, x0, y0, z0, x1, y1, z1, mats):
-        self.prism([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], z0, [z1] * 4, mats)
+        return self.prism([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], z0, [z1] * 4, mats)
 
     def entity(self, classname, origin, **kv):
-        self.entities.append((self.id(), classname, origin, kv))
+        self.entities.append((self.id(), classname, origin, kv, []))
+
+    def trigger(self, classname, x0, y0, x1, y1, **kv):
+        """A brush entity of one tools/toolstrigger box from the floor up to TRIGGER_H."""
+        eid = self.id()
+        solids = []
+        self.target = solids
+        self.box(x0, y0, 0, x1, y1, TRIGGER_H, {"top": TRIGGER, "bottom": TRIGGER, "side": TRIGGER})
+        self.target = self.solids
+        self.entities.append((eid, classname, None, dict(kv, spawnflags="1", StartDisabled="0"), solids))
 
 
 def sub(a, b):
@@ -105,8 +123,15 @@ def build():
     m = Map()
     sky = {"top": SKY, "bottom": SKY, "side": SKY}
 
-    # Shell: floor (seals the bottom), four sky walls and a sky ceiling.
-    m.box(-HALF, -HALF, -SHELL, HALF, HALF, 0, {"top": FLOOR, "bottom": NODRAW, "side": NODRAW})
+    # Shell: floor (seals the bottom), four sky walls and a sky ceiling. The floor under the start line is a
+    # brush of its own, so the line's overlay touches few faces (vbsp allows an overlay 64).
+    fl = {"top": FLOOR, "bottom": NODRAW, "side": NODRAW}
+    fx0, fx1 = FINISH_X - 64, FINISH_X + 64
+    m.box(-HALF, -HALF, -SHELL, fx0, HALF, 0, fl)
+    m.box(fx1, -HALF, -SHELL, HALF, HALF, 0, fl)
+    m.box(fx0, -HALF, -SHELL, fx1, -INNER, 0, fl)
+    m.box(fx0, -ISLAND, -SHELL, fx1, HALF, 0, fl)
+    line_floor = m.box(fx0, -INNER, -SHELL, fx1, -ISLAND, 0, fl)
     m.box(-HALF, -HALF, HEIGHT, HALF, HALF, HEIGHT + SHELL, sky)
     out = HALF + SHELL
     m.box(-out, -out, -SHELL, -HALF, out, HEIGHT + SHELL, sky)
@@ -177,10 +202,45 @@ def build():
     lx0, lx1 = -704, 64
     m.prism([(lx0, jy0), (lx1, jy0), (lx1, jy1), (lx0, jy1)], SINK, [0, 64, 64, 0], ramp)
 
-    # Spawns: 8 in a row across the west end of the south straight, facing east down it.
+    # Race: 3 laps counter-clockwise. The start/finish line crosses the south lane at FINISH_X, and 5 checkpoints
+    # follow round the loop, each full lane width (outer wall to island) and TRIGGER_H tall.
+    m.entity("kart_race_manager", (FINISH_X, -LANE_MID, 64), targetname="race", laps="3", track_name="Kart Arena")
+    m.trigger("kart_finish", FINISH_X - 16, -INNER, FINISH_X + 16, -ISLAND, targetname="finish")
+    checkpoints = [
+        ("x", 0),            # 1: middle of the south straight
+        ("y", 1280),         # 2: east lane, after the gentle ramp
+        ("x", 1536),         # 3: north lane, before the jump
+        ("x", -1280),        # 4: north lane, after the landing
+        ("y", 0),            # 5: middle of the west lane
+    ]
+    cone_spots = []
+    for index, (axis, at) in enumerate(checkpoints, 1):
+        if axis == "x":   # across the south or north lane
+            y0, y1 = (-INNER, -ISLAND) if index == 1 else (ISLAND, INNER)
+            m.trigger("kart_checkpoint", at - 16, y0, at + 16, y1, targetname="checkpoint%d" % index, index=str(index))
+            cone_spots += [(at, y0 + 96), (at, y1 - 96)]
+        else:             # across the east or west lane
+            x0, x1 = (ISLAND, INNER) if at > 0 else (-INNER, -ISLAND)
+            m.trigger("kart_checkpoint", x0, at - 16, x1, at + 16, targetname="checkpoint%d" % index, index=str(index))
+            cone_spots += [(x0 + 96, at), (x1 - 96, at)]
+
+    # Starting grid: 8 kart_start in a 2x4 grid, 96 apart, behind the line and facing east. Pole (grid 0) is on
+    # the inside row, nearest the island.
+    for g in range(8):
+        row, col = divmod(g, 2)
+        m.entity("kart_start", (FINISH_X - 96 - row * 96, -LANE_MID + 48 - col * 96, 8), angles="0 0 0", grid=str(g))
+    # Deathmatch spawns behind the grid, for players beyond the 8 grid slots: a row across the lane, facing east.
     sx = -ISLAND - 640
     for i in range(8):
         m.entity("info_player_deathmatch", (sx, -INNER + 160 + i * 128, 8), angles="0 0 0")
+
+    # Start line painted on the floor along the finish trigger: a 48-wide hazard stripe overlay, wall to island.
+    w, l = 24, (INNER - ISLAND) // 2
+    m.entity("info_overlay", (FINISH_X, -LANE_MID, 0), material=START_LINE.upper(), sides=str(line_floor["top"]),
+             BasisOrigin="%d %d 0" % (FINISH_X, -LANE_MID), BasisNormal="0 0 1", BasisU="0 1 0", BasisV="1 0 0",
+             StartU="0", EndU=str((2 * l) // 64), StartV="0", EndV="1",
+             uv0="%d %d 0" % (-l, -w), uv1="%d %d 0" % (-l, w), uv2="%d %d 0" % (l, w), uv3="%d %d 0" % (l, -w),
+             fademindist="-1", fademaxdist="0")
 
     def prop(model, origin, yaw=0):
         m.entity("prop_static", origin, model=model, angles="0 %d 0" % yaw, solid="6", skin="0",
@@ -188,17 +248,19 @@ def build():
 
     def physics_prop(model, origin, yaw=0):
         # Models with physics-only collision (the cone) can't be prop_static; karts can knock these over.
+        # The cone's origin is at its middle, so lift it to stand on the floor.
+        origin = (origin[0], origin[1], origin[2] + 16)
         m.entity("prop_physics_multiplayer", origin, model=model, angles="0 %d 0" % yaw, skin="0",
                  physicsmode="1", fademindist="-1", fadescale="1")
 
     cone = "models/props_junk/trafficcone001a.mdl"
     barrier = "models/props_c17/concrete_barrier001a.mdl"
     lamp = "models/props_c17/lamppost03a_off.mdl"
-    # Start line: a cone at each end of the spawn row.
-    physics_prop(cone, (sx + 96, -INNER + 48, 0))
-    physics_prop(cone, (sx + 96, -ISLAND - 48, 0))
-    # Cones down the middle of the straight.
-    for x in range(sx + 640, ISLAND - 640, 512):
+    # A cone at each end of the start line and of every checkpoint.
+    for x, y in [(FINISH_X, -INNER + 96), (FINISH_X, -ISLAND - 96)] + cone_spots:
+        physics_prop(cone, (x, y, 0))
+    # Cones down the middle of the straight, after the line.
+    for x in range(FINISH_X + 512, ISLAND - 640, 512):
         physics_prop(cone, (x, -LANE_MID, 0))
     # Barriers at the island's three square corners, at 45 degrees.
     for (x, y), yaw in (((-ISLAND - 96, -ISLAND - 96), 45), ((-ISLAND - 96, ISLAND + 96), -45), ((ISLAND + 96, ISLAND + 96), 45)):
@@ -207,6 +269,16 @@ def build():
     for x in (lx0 + 128, lx0 + 384, lx0 + 640):
         prop(barrier, (x, jy0 - 64, 0), 0)
         prop(barrier, (x, jy1 + 64, 0), 0)
+    # Barriers along the loop's outer edge, against the perimeter walls (the model is long along its y axis),
+    # except in the lamppost corners and on the banked south-east curve.
+    edge = INNER - 32
+    for t in range(-2560, 2561, 512):
+        if t < ISLAND - 640:
+            prop(barrier, (t, -edge, 0), 90)       # south
+        if t > -ISLAND + 640:
+            prop(barrier, (edge, t, 0), 0)         # east
+        prop(barrier, (t, edge, 0), 90)            # north
+        prop(barrier, (-edge, t, 0), 0)            # west
     # Lampposts in the arena's corners and the middle of each island side.
     c = INNER - 96
     for x, y in ((-c, -c), (c, -c), (c, c), (-c, c)):
@@ -231,21 +303,27 @@ def write(m, f):
       '\t"nGridSpacing" "64"\n\t"bShow3DGrid" "0"\n}\n')
     w('world\n{\n\t"id" "1"\n\t"mapversion" "1"\n\t"classname" "worldspawn"\n\t"skyname" "sky_day01_01"\n'
       '\t"maxpropscreenwidth" "-1"\n\t"detailvbsp" "detail.vbsp"\n\t"detailmaterial" "detail/detailsprites"\n')
-    for sid, faces, centre in m.solids:
+    def solid(sid, sides, centre, color):
         w('\tsolid\n\t{\n\t\t"id" "%d"\n' % sid)
-        for mat, loop in faces:
+        for side_id, mat, loop in sides:
             pts, normal = plane(loop, centre)
             u, v = tex_axes(normal)
             w('\t\tside\n\t\t{\n\t\t\t"id" "%d"\n\t\t\t"plane" "%s"\n\t\t\t"material" "%s"\n'
               '\t\t\t"uaxis" "%s"\n\t\t\t"vaxis" "%s"\n\t\t\t"rotation" "0"\n\t\t\t"lightmapscale" "16"\n'
-              '\t\t\t"smoothing_groups" "0"\n\t\t}\n' % (m.id(), " ".join(fmt(p) for p in pts), mat.upper(), u, v))
-        w('\t\teditor\n\t\t{\n\t\t\t"color" "0 180 220"\n\t\t\t"visgroupshown" "1"\n\t\t\t"visgroupautoshown" "1"\n\t\t}\n\t}\n')
+              '\t\t\t"smoothing_groups" "0"\n\t\t}\n' % (side_id, " ".join(fmt(p) for p in pts), mat.upper(), u, v))
+        w('\t\teditor\n\t\t{\n\t\t\t"color" "%s"\n\t\t\t"visgroupshown" "1"\n\t\t\t"visgroupautoshown" "1"\n\t\t}\n\t}\n' % color)
+
+    for s in m.solids:
+        solid(*s, "0 180 220")
     w('}\n')
-    for eid, classname, origin, kv in m.entities:
+    for eid, classname, origin, kv, solids in m.entities:
         w('entity\n{\n\t"id" "%d"\n\t"classname" "%s"\n' % (eid, classname))
         for k, v in kv.items():
             w('\t"%s" "%s"\n' % (k, v))
-        w('\t"origin" "%s"\n' % " ".join("%g" % c for c in origin))
+        if origin is not None:
+            w('\t"origin" "%s"\n' % " ".join("%g" % c for c in origin))
+        for s in solids:
+            solid(*s, "220 30 220")
         w('\teditor\n\t{\n\t\t"color" "220 30 220"\n\t\t"visgroupshown" "1"\n\t\t"visgroupautoshown" "1"\n'
           '\t\t"logicalpos" "[0 0]"\n\t}\n}\n')
     w('cameras\n{\n\t"activecamera" "-1"\n}\n')

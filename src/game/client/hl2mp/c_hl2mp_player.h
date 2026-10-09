@@ -139,6 +139,13 @@ public:
 	float GetKartBestLap( void ) const { return m_flKartBestLap; }
 	float GetKartTotalTime( void ) const { return m_flKartTotalTime; }
 
+	// Kart item (see kart_items.h), networked for every player.
+	int GetKartItem( void ) const { return m_nKartItem; }
+	int GetKartItemCount( void ) const { return m_nKartItemCount; }
+	int GetKartRouletteItem( void ) const { return m_nKartRouletteItem; }
+	float GetKartRouletteEnd( void ) const { return m_flKartRouletteEnd; }
+	bool IsKartRouletteSpinning( void ) const { return gpGlobals->curtime < m_flKartRouletteEnd; }
+
 	// In kart mode: locks the view to the kart heading and strips non-kart input.
 	virtual bool CreateMove( float flInputSampleTime, CUserCmd *pCmd ) OVERRIDE;
 
@@ -212,6 +219,12 @@ private:
 	float	m_flKartLapStartTime;
 	float	m_flKartBestLap;
 	float	m_flKartTotalTime;
+
+	// Kart item, from the server.
+	int		m_nKartItem;
+	int		m_nKartItemCount;
+	int		m_nKartRouletteItem;
+	float	m_flKartRouletteEnd;
 
 	CSoundPatch	*m_pKartEngineIdle;
 	CSoundPatch	*m_pKartEngineRev;

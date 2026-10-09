@@ -130,42 +130,54 @@ layout in the script, regenerate the VMF, compile, and commit all three. The VMF
 - A 6144 x 6144 x 1024 box sealed by `tools/toolsskybox` brushes, skybox `sky_day01_01`, one `light_environment`.
   Floor `concrete/concretefloor011a`, 128-high perimeter walls `concrete/concretewall004a`.
 - A 3584 x 3584 central island, 128 high, makes a 1216-wide lane round it, driven counter-clockwise seen from above.
-- **Start**: 8 `info_player_deathmatch` in a row across the west end of the south lane, facing east.
-- **South straight**: about 4200 units from the start row to the curve, with traffic cones (physics props) down
-  its middle and a cone at each end of the start row.
+- **Race**: a `kart_race_manager` (3 laps, track name "Kart Arena"). The loop is driven counter-clockwise: south
+  straight east, banked curve, east lane north, north lane west, west lane south, back to the line.
+- **Start/finish**: `kart_finish` across the south lane at x -1536, wall to island and 512 tall, with a
+  `dev/dev_hazzardstripe01a` overlay painted along it (on a floor brush of its own: vbsp allows an overlay 64 faces)
+  and a cone at each end. 8 `kart_start` (grid 0-7) in a 2x4 grid, 96 apart, behind it facing east, pole on the
+  island side. 8 `info_player_deathmatch` further back across the lane, for players beyond the grid.
+- **Checkpoints**: 5 `kart_checkpoint` (tools/toolstrigger, full lane width, 512 tall), with a cone at each end:
+  1 mid south straight (x 0), 2 east lane after the ramp (y 1280), 3 north lane before the jump (x 1536), 4 north
+  lane after the landing (x -1280), 5 mid west lane (y 0). Check them with `kart_race_dump`.
+- No respawn zone: there is no `kart_respawn_zone` entity yet, and the arena is walled with nothing to fall off.
+- **South straight**: about 3300 units from the line to the curve, with traffic cones (physics props) down its
+  middle.
 - **Banked curve** (south-east corner): a quarter circle round the island's corner. The outer 416 units are banked,
   rising to 128 at the outer wall (~17 degrees); the inner 800 are flat. It is made of 12 segments, with 640-unit
   tapered pieces at each end so the bank grows from and back to flat floor.
 - **Gentle ramp** (east lane, driven north): up 96 over 544 units (~10 degrees), a 384-unit plateau, down again.
 - **Jump** (north lane, driven west): a kicker rising 112 over 240 (~25 degrees) that ends in a drop, a 592-unit
   gap, then a landing ramp from 64 down to the floor over 768 units, with concrete barriers along both sides.
-- Concrete barriers at the island's other three corners, `lamppost03a_off` lampposts in the arena's corners and
+- Concrete barriers along the outer walls every 512 units (not in the corners or on the banked curve) and at the
+  island's other three corners, `lamppost03a_off` lampposts in the arena's corners and
   the middle of each island side, and two `env_cubemap` (start straight, jump). Run `buildcubemaps` in game for
   proper reflections.
 
 ```
    N                         north lane, driven west  <--
    +-------------------------------------------------------------+
-   | L                                                         L |
-   |            ===barriers===                                   |
-   |            [ landing   ]  gap   [K]   <-- jump (kicker K)    |
-   |            ===barriers===          (env_cubemap)            |
-   |        B                    L                    B          |
+   | L  b    b    b    b    b    b    b    b    b    b    b     L |
+   |     c      ===barriers===                     c            |
+   |    4|      [ landing   ]  gap   [K]   <-- jump |3          |
+   |     c      ===barriers===          (env_cubemap) c          |
+   |b       B                    L                    B         b|
    |          +---------------------------------------+          |
-   |          |                                       |          |
+   |b         |                                       |   c-2-c b|
  w |          |                                       |   [up  ] | e
- e |          |                                       |   [ 10 ] | a
- s |        L |            central island             | L [deg ] | s
- t |          |              128 high                 |   [ramp] | t
+ e |b         |                                       |   [ 10 ] | a
+ s |c-5-c   L |            central island             | L [deg ] |bs
+ t |b         |              128 high                 |   [ramp] | t
    |          |                                       |          |
- | |          |                                       |       ^  |
+ | |b         |                                       |       ^ b|
  v |          |                                       |    ,/  | |
-   |        B +---------------------------------------+  ,/bank| |
-   | c S                         L                     ,/curve | |
-   |   S                                             ,/ 17 deg   |
-   |   S  >  c   c   c   c   c   c    (straight)  ,/ (banked)    |
-   |   S                                       __/               |
-   | L c                                ______/                L |
+   |b       B +---------------------------------------+  ,/bank| |
+   |       c                     c                     ,/curve | |
+   | D     #|                    |                   ,/ 17 deg   |
+   | D   GG#F >  c   c   c   c   1   c   c  (straight) (banked)  |
+   | D   GG#|                    |              __/              |
+   | L     c                     c       ______/               L |
+   |  b    b    b    b    b    b    b                            |
    +-------------------------------------------------------------+
-   S spawns (8, facing east)   c cones   B barriers   L lampposts
+   F kart_finish (# hazard-stripe line)   G kart_start 2x4 grid   D deathmatch spawns
+   1-5 kart_checkpoint (c cone at each end)   c cones   b, B barriers   L lampposts
 ```
