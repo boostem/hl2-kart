@@ -22,6 +22,24 @@ bool KartHud_LocalPlayerInKart( void )
 	return pPlayer && pPlayer->IsInKart();
 }
 
+const wchar_t *KartHud_OrdinalSuffix( int n )
+{
+	n = abs( n );
+
+	// 11th, 12th, 13th, 111th...
+	int nTens = n % 100;
+	if ( nTens >= 11 && nTens <= 13 )
+		return L"th";
+
+	switch ( n % 10 )
+	{
+	case 1:	return L"st";
+	case 2:	return L"nd";
+	case 3:	return L"rd";
+	default: return L"th";
+	}
+}
+
 CKartHudElement::CKartHudElement( const char *pElementName, const char *pPanelName ) :
 	CHudElement( pElementName ), BaseClass( NULL, pPanelName )
 {

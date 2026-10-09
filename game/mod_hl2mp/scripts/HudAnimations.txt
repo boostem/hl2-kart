@@ -860,3 +860,13 @@ event HideVoteBackgrounds
 	Animate		LabelOption5	Alpha	255 Linear	0.0 0.001
 }
 
+//////////////////////// KART HUD /////////////////////////
+
+// The race position changed (CKartPosition): flash amber and glow, then settle back.
+event KartPositionPulse
+{
+	Animate KartPosition	TextColor	"KartAmber"	Linear	0.0		0.05
+	Animate KartPosition	Blur		"3"			Linear	0.0		0.05
+	Animate KartPosition	TextColor	"KartWhite"	Deaccel	0.05	0.6
+	Animate KartPosition	Blur		"0"			Deaccel	0.05	0.6
+}

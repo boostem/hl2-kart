@@ -748,18 +748,6 @@
 	// positions so far; each element adds its own keys when it lands.
 	// "r" is from the right/bottom edge and "c" from the center.
 
-	// Race position, top left
-	KartPosition
-	{
-		"fieldName"		"KartPosition"
-		"xpos"			"16"
-		"ypos"			"12"
-		"wide"			"120"
-		"tall"			"56"
-		"visible"		"1"
-		"enabled"		"1"
-	}
-
 	// Held item, top center
 	KartItemSlot
 	{
@@ -772,11 +760,11 @@
 		"enabled"		"1"
 	}
 
-	// Lap, top right
+	// Lap, top left (CKartLapCounter, hl2mp/kart_hud_race.cpp)
 	KartLapCounter
 	{
 		"fieldName"		"KartLapCounter"
-		"xpos"			"r136"
+		"xpos"			"16"
 		"ypos"			"12"
 		"wide"			"120"
 		"tall"			"36"
@@ -788,10 +776,22 @@
 	KartTimer
 	{
 		"fieldName"		"KartTimer"
-		"xpos"			"r136"
+		"xpos"			"16"
 		"ypos"			"48"
 		"wide"			"120"
 		"tall"			"24"
+		"visible"		"1"
+		"enabled"		"1"
+	}
+
+	// Race position, bottom left (CKartPosition, hl2mp/kart_hud_race.cpp)
+	KartPosition
+	{
+		"fieldName"		"KartPosition"
+		"xpos"			"16"
+		"ypos"			"r72"
+		"wide"			"120"
+		"tall"			"56"
 		"visible"		"1"
 		"enabled"		"1"
 	}
@@ -832,11 +832,11 @@
 		"enabled"		"1"
 	}
 
-	// TEMPORARY font test (kart_hud_test), bottom left
+	// TEMPORARY font test (kart_hud_test), bottom center
 	KartHudTest
 	{
 		"fieldName"		"KartHudTest"
-		"xpos"			"16"
+		"xpos"			"c-160"
 		"ypos"			"r116"
 		"wide"			"320"
 		"tall"			"100"
