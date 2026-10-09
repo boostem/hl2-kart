@@ -115,6 +115,7 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropBool( SENDINFO( m_bKartMode ) ),
 	SendPropInt( SENDINFO( m_nKartDriftDir ), 2 ),	// signed: -1, 0, 1. Everyone gets it, for drift effects on other karts.
 	SendPropInt( SENDINFO( m_nKartSteer ), 2 ),	// signed: -1, 0, 1. Everyone gets it, to turn the wheels of other karts.
+	SendPropModelIndex( SENDINFO( m_nKartDriverModel ) ),
 
 	// kart race state, for everyone's HUD and the bots
 	SendPropInt( SENDINFO( m_nKartLap ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
@@ -198,6 +199,7 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartSpeed = 0.0f;
 	m_flKartYaw = 0.0f;
 	m_flKartReverseTime = 0.0f;
+	m_nKartDriverModel = -1;
 	m_flKartBumpCooldown = 0.0f;
 	m_nKartDriftDir = 0;
 	m_nKartSteer = 0;
@@ -732,6 +734,7 @@ void CHL2MP_Player::SetKartModel( void )
 	SetCollisionBounds( KART_HULL_MIN, KART_HULL_MAX );
 	ResetSequence( 0 );
 	ApplyKartColor();
+	ApplyKartDriverModel();
 
 	m_flNextModelChangeTime = gpGlobals->curtime + MODEL_CHANGE_INTERVAL;
 }
@@ -763,6 +766,31 @@ void CHL2MP_Player::KartTeleport( const Vector &vecOrigin, float flYaw )
 	Teleport( &vecOrigin, &angles, &vec3_origin );
 	SnapEyeAngles( angles );
 	ResetKartMovement( flYaw );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The driver seated in the kart: the player's cl_playermodel (set in
+//			Options > Multiplayer), or the default citizen when it is unset or
+//			not a player model. Bots have no userinfo and get a citizen by
+//			entity index.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::ApplyKartDriverModel( void )
+{
+	const char *pszModel = g_ppszRandomCitizenModels[0];
+	if ( IsFakeClient() )
+	{
+		pszModel = g_ppszRandomCitizenModels[entindex() % ARRAYSIZE( g_ppszRandomCitizenModels )];
+	}
+	else
+	{
+		const char *pszPlayerModel = engine->GetClientConVarValue( entindex(), "cl_playermodel" );
+		if ( ValidatePlayerModel( pszPlayerModel ) && modelinfo->GetModelIndex( pszPlayerModel ) >= 0 )
+		{
+			pszModel = pszPlayerModel;
+		}
+	}
+
+	m_nKartDriverModel = modelinfo->GetModelIndex( pszModel );
 }
 
 //-----------------------------------------------------------------------------

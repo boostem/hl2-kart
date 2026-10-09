@@ -18,6 +18,7 @@
 #include "r_efx.h"
 #include "dlight.h"
 #include "soundenvelope.h"
+#include "bone_setup.h"
 
 // Don't alias here
 #if defined( CHL2MP_Player )
@@ -47,6 +48,11 @@ ConVar kart_cam_fov( "kart_cam_fov", "95", FCVAR_ARCHIVE, "Kart chase camera fie
 ConVar cl_kart_steer_angle( "cl_kart_steer_angle", "25", FCVAR_ARCHIVE, "Kart front wheel steering lock at low speed, in degrees. It shrinks with the turn rate at speed." );
 ConVar cl_kart_steer_ratio( "cl_kart_steer_ratio", "3", FCVAR_ARCHIVE, "Kart steering ratio: degrees the steering wheel turns per degree of the front wheels." );
 ConVar cl_kart_steer_speed( "cl_kart_steer_speed", "10", FCVAR_ARCHIVE, "How quickly the kart's drawn steering follows the input. Higher is snappier." );
+ConVar cl_kart_driver( "cl_kart_driver", "1", FCVAR_ARCHIVE, "Draw a driver in karts that have grip_l/grip_r attachments." );
+ConVar cl_kart_driver_seat( "cl_kart_driver_seat", "-7 0 25", FCVAR_ARCHIVE, "Where the driver's pelvis sits, in kart model space (x forward, y left, z up)." );
+ConVar cl_kart_driver_feet( "cl_kart_driver_feet", "24 6 12", FCVAR_ARCHIVE, "Where the driver's feet rest, in kart model space; y is mirrored for the right foot." );
+ConVar cl_kart_driver_tilt( "cl_kart_driver_tilt", "5", FCVAR_ARCHIVE, "Degrees the driver's upper body leans forward towards the steering wheel." );
+ConVar cl_kart_driver_lean( "cl_kart_driver_lean", "10", FCVAR_ARCHIVE, "Degrees the driver's upper body leans into a full turn." );
 ConVar cl_kart_steer_drift_counter( "cl_kart_steer_drift_counter", "0.15 0.5 0.9", FCVAR_ARCHIVE, "Counter-steer in a drift as a fraction of cl_kart_steer_angle: steering into the drift, no steer, steering against it." );
 ConVar kart_cam_min_dist( "kart_cam_min_dist", "80", FCVAR_ARCHIVE, "Hide the local kart when a wall pulls the chase camera closer than this to it." );
 
@@ -91,6 +97,7 @@ IMPLEMENT_CLIENTCLASS_DT(C_HL2MP_Player, DT_HL2MP_Player, CHL2MP_Player)
 	RecvPropBool( RECVINFO( m_bKartMode ) ),
 	RecvPropInt( RECVINFO( m_nKartDriftDir ) ),
 	RecvPropInt( RECVINFO( m_nKartSteer ) ),
+	RecvPropInt( RECVINFO( m_nKartDriverModel ) ),
 
 	RecvPropInt( RECVINFO( m_nKartLap ) ),
 	RecvPropInt( RECVINFO( m_nKartNextCheckpoint ) ),
@@ -216,6 +223,9 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 
 	m_flKartSteerAngle = 0.0f;
 	m_iKartBoneSteerFL = -1;
+	m_nKartDriverModel = -1;
+	m_pKartDriver = NULL;
+	m_flKartDriverLean = 0.0f;
 	m_iKartBoneSteerFR = -1;
 	m_iKartBoneSteeringWheel = -1;
 
@@ -233,6 +243,7 @@ C_HL2MP_Player::~C_HL2MP_Player( void )
 {
 	ReleaseFlashlight();
 	StopKartSounds();
+	RemoveKartDriver();
 }
 
 int C_HL2MP_Player::GetIDTarget() const
@@ -439,6 +450,7 @@ void C_HL2MP_Player::ClientThink( void )
 
 	UpdateKartSounds();
 	UpdateKartSteering();
+	UpdateKartDriver();
 	UpdateKartSkidmarks();
 }
 
@@ -534,6 +546,266 @@ void C_HL2MP_Player::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, 
 		AngleMatrix( QAngle( 0.0f, turns[i].flTurn, 0.0f ), matTurn );	// yaw: about local Z
 		MatrixCopy( GetBone( iBone ), matOld );
 		ConcatTransforms( matOld, matTurn, GetBoneForWrite( iBone ) );
+	}
+}
+
+// A "x y z" convar as a vector, in kart model space.
+static Vector KartConVarVector( const ConVar &var )
+{
+	Vector vec( 0.0f, 0.0f, 0.0f );
+	sscanf( var.GetString(), "%f %f %f", &vec.x, &vec.y, &vec.z );
+	return vec;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The driver of a kart: a client-only copy of the player's model.
+//			HL2MP's models (citizens and combine, all on the ValveBiped
+//			skeleton) have no seated animation, so the idle pose is posed in
+//			code: moved onto the seat, the upper body tilted towards the
+//			steering wheel and leaning into turns, then the legs reach for the
+//			pedals and the hands for the kart's grip_l/grip_r attachments,
+//			which turn with the steering wheel.
+//-----------------------------------------------------------------------------
+enum
+{
+	KART_DRIVER_LEG_L,
+	KART_DRIVER_LEG_R,
+	KART_DRIVER_ARM_L,
+	KART_DRIVER_ARM_R,
+	KART_DRIVER_LIMBS
+};
+
+class C_KartDriver : public C_BaseAnimating
+{
+	DECLARE_CLASS( C_KartDriver, C_BaseAnimating );
+public:
+	explicit C_KartDriver( C_HL2MP_Player *pKart ) : m_pKart( pKart ), m_iPelvis( -1 ), m_iSpine( -1 ) {}
+
+	virtual CStudioHdr *OnNewModel( void ) OVERRIDE;
+	virtual bool ShouldDraw( void ) OVERRIDE;
+	virtual int DrawModel( int flags ) OVERRIDE;
+	virtual void BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed ) OVERRIDE;
+
+private:
+	C_HL2MP_Player *m_pKart;	// owns this entity and removes it before it goes
+	int		m_iPelvis;
+	int		m_iSpine;
+	int		m_iLimb[KART_DRIVER_LIMBS][3];	// thigh, calf, foot / upper arm, forearm, hand; -1 when the model lacks one
+};
+
+CStudioHdr *C_KartDriver::OnNewModel( void )
+{
+	CStudioHdr *hdr = BaseClass::OnNewModel();
+
+	static const char *s_pszLimbs[KART_DRIVER_LIMBS][3] =
+	{
+		{ "ValveBiped.Bip01_L_Thigh", "ValveBiped.Bip01_L_Calf", "ValveBiped.Bip01_L_Foot" },
+		{ "ValveBiped.Bip01_R_Thigh", "ValveBiped.Bip01_R_Calf", "ValveBiped.Bip01_R_Foot" },
+		{ "ValveBiped.Bip01_L_UpperArm", "ValveBiped.Bip01_L_Forearm", "ValveBiped.Bip01_L_Hand" },
+		{ "ValveBiped.Bip01_R_UpperArm", "ValveBiped.Bip01_R_Forearm", "ValveBiped.Bip01_R_Hand" },
+	};
+	m_iPelvis = LookupBone( "ValveBiped.Bip01_Pelvis" );
+	m_iSpine = LookupBone( "ValveBiped.Bip01_Spine" );
+	for ( int i = 0; i < KART_DRIVER_LIMBS; ++i )
+	{
+		for ( int j = 0; j < 3; ++j )
+		{
+			m_iLimb[i][j] = LookupBone( s_pszLimbs[i][j] );
+		}
+	}
+
+	return hdr;
+}
+
+bool C_KartDriver::ShouldDraw( void )
+{
+	return m_pKart && m_pKart->ShouldDraw();
+}
+
+int C_KartDriver::DrawModel( int flags )
+{
+	// Hidden with the kart when the chase camera is pulled inside it.
+	if ( m_pKart && m_pKart->IsKartCamTooClose() && m_pKart->IsLocalPlayer() && !( flags & STUDIO_SHADOWDEPTHTEXTURE ) )
+		return 0;
+
+	return BaseClass::DrawModel( flags );
+}
+
+void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed )
+{
+	BaseClass::BuildTransformations( pStudioHdr, pos, q, cameraTransform, boneMask, boneComputed );
+
+	const int nBones = pStudioHdr->numbones();
+	if ( !m_pKart || nBones > MAXSTUDIOBONES )
+		return;
+
+	// Every bone posed here must have been set up for this mask.
+	if ( m_iPelvis < 0 || m_iSpine < 0 || !( pStudioHdr->boneFlags( m_iPelvis ) & boneMask ) || !( pStudioHdr->boneFlags( m_iSpine ) & boneMask ) )
+		return;
+	for ( int i = 0; i < KART_DRIVER_LIMBS; ++i )
+	{
+		for ( int j = 0; j < 3; ++j )
+		{
+			if ( m_iLimb[i][j] < 0 || !( pStudioHdr->boneFlags( m_iLimb[i][j] ) & boneMask ) )
+				return;
+		}
+	}
+
+	int iGrip[2] = { m_pKart->LookupAttachment( "grip_l" ), m_pKart->LookupAttachment( "grip_r" ) };
+	Vector vecGrip[2];
+	if ( iGrip[0] <= 0 || iGrip[1] <= 0 || !m_pKart->GetAttachment( iGrip[0], vecGrip[0] ) || !m_pKart->GetAttachment( iGrip[1], vecGrip[1] ) )
+		return;
+
+	matrix3x4_t *pBones = m_BoneAccessor.GetBoneArrayForWrite();
+
+	matrix3x4_t matKart;
+	AngleMatrix( m_pKart->GetRenderAngles(), m_pKart->GetRenderOrigin(), matKart );
+	Vector vecForward, vecLeft, vecUp;
+	MatrixGetColumn( matKart, 0, vecForward );
+	MatrixGetColumn( matKart, 1, vecLeft );
+	MatrixGetColumn( matKart, 2, vecUp );
+
+	// Onto the seat: move the whole pose so the pelvis is there.
+	Vector vecSeat, vecPelvis;
+	VectorTransform( KartConVarVector( cl_kart_driver_seat ), matKart, vecSeat );
+	MatrixPosition( pBones[m_iPelvis], vecPelvis );
+	const Vector vecShift = vecSeat - vecPelvis;
+	for ( int i = 0; i < nBones; ++i )
+	{
+		for ( int k = 0; k < 3; ++k )
+		{
+			pBones[i][k][3] += vecShift[k];
+		}
+	}
+
+	// The upper body (the spine and everything on it) tilts forward and leans
+	// into the turn about the pelvis. Positive turns about the left axis
+	// pitch forward, about the forward axis roll right.
+	matrix3x4_t matTilt, matLean, matUpper;
+	MatrixBuildRotationAboutAxis( vecLeft, cl_kart_driver_tilt.GetFloat(), matTilt );
+	MatrixBuildRotationAboutAxis( vecForward, m_pKart->GetKartDriverLean() * cl_kart_driver_lean.GetFloat(), matLean );
+	ConcatTransforms( matLean, matTilt, matUpper );
+	Vector vecPivot;
+	VectorRotate( vecSeat, matUpper, vecPivot );
+	MatrixSetColumn( vecSeat - vecPivot, 3, matUpper );
+
+	bool bUpper[MAXSTUDIOBONES];
+	for ( int i = 0; i < nBones; ++i )
+	{
+		int iParent = pStudioHdr->boneParent( i );
+		bUpper[i] = ( i == m_iSpine ) || ( iParent >= 0 && bUpper[iParent] );
+		if ( bUpper[i] )
+		{
+			matrix3x4_t matOld;
+			MatrixCopy( pBones[i], matOld );
+			ConcatTransforms( matUpper, matOld, pBones[i] );
+		}
+	}
+
+	matrix3x4_t matBefore[MAXSTUDIOBONES];
+	memcpy( matBefore, pBones, nBones * sizeof( matrix3x4_t ) );
+
+	// Feet on the pedals, knees up; hands on the grips, elbows out and down.
+	Vector vecFeet = KartConVarVector( cl_kart_driver_feet );
+	Vector vecTarget[KART_DRIVER_LIMBS], vecBend[KART_DRIVER_LIMBS];
+	VectorTransform( Vector( vecFeet.x, vecFeet.y, vecFeet.z ), matKart, vecTarget[KART_DRIVER_LEG_L] );
+	VectorTransform( Vector( vecFeet.x, -vecFeet.y, vecFeet.z ), matKart, vecTarget[KART_DRIVER_LEG_R] );
+	vecTarget[KART_DRIVER_ARM_L] = vecGrip[0];
+	vecTarget[KART_DRIVER_ARM_R] = vecGrip[1];
+	vecBend[KART_DRIVER_LEG_L] = vecBend[KART_DRIVER_LEG_R] = vecUp;
+	vecBend[KART_DRIVER_ARM_L] = ( vecLeft - vecUp ).Normalized();
+	vecBend[KART_DRIVER_ARM_R] = ( -vecLeft - vecUp ).Normalized();
+
+	bool bMoved[MAXSTUDIOBONES] = {};
+	for ( int i = 0; i < KART_DRIVER_LIMBS; ++i )
+	{
+		const int *iBone = m_iLimb[i];
+		Vector vecJoint;
+		MatrixPosition( pBones[iBone[1]], vecJoint );
+		if ( !Studio_SolveIK( iBone[0], iBone[1], iBone[2], vecTarget[i], vecJoint, vecBend[i], pBones ) )
+			continue;
+
+		if ( i == KART_DRIVER_ARM_L || i == KART_DRIVER_ARM_R )
+		{
+			// A straight wrist, carrying on from the forearm.
+			Vector vecForearm, vecHand;
+			MatrixPosition( pBones[iBone[1]], vecForearm );
+			MatrixPosition( pBones[iBone[2]], vecHand );
+			Studio_AlignIKMatrix( pBones[iBone[2]], vecHand - vecForearm );
+		}
+		bMoved[iBone[0]] = bMoved[iBone[1]] = bMoved[iBone[2]] = true;
+	}
+
+	// Everything hanging off the posed limbs (twist bones, fingers, toes)
+	// follows its parent.
+	for ( int i = 0; i < nBones; ++i )
+	{
+		int iParent = pStudioHdr->boneParent( i );
+		if ( bMoved[i] || iParent < 0 || !bMoved[iParent] )
+			continue;
+
+		matrix3x4_t matParentInv, matLocal;
+		MatrixInvert( matBefore[iParent], matParentInv );
+		ConcatTransforms( matParentInv, matBefore[i], matLocal );
+		ConcatTransforms( pBones[iParent], matLocal, pBones[i] );
+		bMoved[i] = true;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Keeps the driver in the kart: created for karts with grips once the
+//			server has picked a model, replaced when the model changes, gone
+//			with the kart. Eases the lean towards the turn, which grows with
+//			speed: into the drift while drifting, else the way it is steering.
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::UpdateKartDriver( void )
+{
+	const model_t *pModel = ( m_nKartDriverModel > 0 ) ? modelinfo->GetModel( m_nKartDriverModel ) : NULL;
+	if ( !pModel || !cl_kart_driver.GetBool() || !IsInKart() || !IsAlive() || IsDormant()
+		|| LookupAttachment( "grip_l" ) <= 0 || LookupAttachment( "grip_r" ) <= 0 )
+	{
+		RemoveKartDriver();
+		m_flKartDriverLean = 0.0f;
+		return;
+	}
+
+	float flTurn = ( m_nKartDriftDir != 0 ) ? m_nKartDriftDir : m_nKartSteer;
+	float flTarget = flTurn * RemapValClamped( fabs( m_flKartSpeed ), 0.0f, KartEngineMaxSpeed() * 0.5f, 0.0f, 1.0f );
+	float flBlend = clamp( gpGlobals->frametime * cl_kart_steer_speed.GetFloat() * 0.5f, 0.0f, 1.0f );
+	m_flKartDriverLean += ( flTarget - m_flKartDriverLean ) * flBlend;
+
+	if ( m_pKartDriver && m_pKartDriver->GetModel() != pModel )
+	{
+		RemoveKartDriver();
+	}
+
+	if ( !m_pKartDriver )
+	{
+		C_KartDriver *pDriver = new C_KartDriver( this );
+		if ( !pDriver->InitializeAsClientEntity( modelinfo->GetModelName( pModel ), RENDER_GROUP_OPAQUE_ENTITY ) )
+		{
+			pDriver->Release();
+			return;
+		}
+
+		int iSequence = pDriver->SelectWeightedSequence( ACT_HL2MP_IDLE );
+		pDriver->SetSequence( ( iSequence >= 0 ) ? iSequence : 0 );
+		pDriver->SetCycle( 0.0f );
+		pDriver->SetPlaybackRate( 0.0f );
+		m_pKartDriver = pDriver;
+	}
+
+	m_pKartDriver->SetAbsOrigin( GetRenderOrigin() );
+	m_pKartDriver->SetAbsAngles( GetRenderAngles() );
+	m_pKartDriver->UpdateVisibility();
+}
+
+void C_HL2MP_Player::RemoveKartDriver( void )
+{
+	if ( m_pKartDriver )
+	{
+		m_pKartDriver->Release();
+		m_pKartDriver = NULL;
 	}
 }
 
@@ -1155,6 +1427,7 @@ void C_HL2MP_Player::NotifyShouldTransmit( ShouldTransmitState_t state )
 		}
 
 		StopKartSounds();
+		RemoveKartDriver();
 	}
 
 	BaseClass::NotifyShouldTransmit( state );

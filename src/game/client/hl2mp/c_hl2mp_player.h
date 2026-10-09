@@ -15,6 +15,7 @@ class C_HL2MP_Player;
 #include "beamdraw.h"
 
 class CSoundPatch;
+class C_KartDriver;
 
 //=============================================================================
 //=============================================================================
@@ -168,6 +169,12 @@ public:
 	void UpdateKartSteering( void );
 	virtual void BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed ) OVERRIDE;
 
+	// The driver: the player's model seated in the kart, hands on grip_l/grip_r, leaning into turns.
+	void UpdateKartDriver( void );
+	void RemoveKartDriver( void );
+	float GetKartDriverLean( void ) const { return m_flKartDriverLean; }	// -1 full left .. +1 full right
+	bool IsKartCamTooClose( void ) const { return m_bKartCamTooClose; }
+
 	virtual void PostThink( void );
 
 private:
@@ -264,6 +271,11 @@ private:
 	int		m_iKartBoneSteerFL;
 	int		m_iKartBoneSteerFR;
 	int		m_iKartBoneSteeringWheel;
+
+	// Driver (client only), drawn with m_nKartDriverModel, the server's pick from cl_playermodel.
+	int		m_nKartDriverModel;
+	C_KartDriver	*m_pKartDriver;
+	float	m_flKartDriverLean;	// see GetKartDriverLean
 };
 
 inline C_HL2MP_Player *ToHL2MPPlayer( CBaseEntity *pEntity )
