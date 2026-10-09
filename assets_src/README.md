@@ -2,6 +2,7 @@
 
 Sources for assets before compilation.
 
+- `assets_src/test/test_cube/`: hand-written test model for the wine toolchain (see `docs/asset-pipeline.md`).
 - `assets_src/<model_name>/build_<model_name>.py`: Blender script that builds the model; exported SMD/DMX and the QC file sit next to it.
 - `assets_src/maps/*.vmf`: map sources.
 - `assets_src/textures/`: texture originals.

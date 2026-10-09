@@ -1,0 +1,5 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/test/test_cube"
+	"$surfaceprop" "metal"
+}
