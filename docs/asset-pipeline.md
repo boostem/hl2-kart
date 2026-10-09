@@ -147,7 +147,7 @@ layout in the script, regenerate the VMF, compile, and commit all three. The VMF
 - **Boost pads**: two `kart_boost_pad` (1.0 s, scale 1.4, 1 s cooldown) on the south straight across the racing line,
   at x 192-448 and x 704-960, each 64 tall over a 4-high `dev/dev_hazzardstripe01a` slab.
 - **Hairpin** (west lane): two staggered 80-thick concrete barriers at y 600 (from the outer wall) and y -600 (from the
-  island), each reaching 800 across the lane, for drift practice; the bots' line weaves through (drift hint at line24).
+  island), each reaching 800 across the lane, for drift practice; the bots' line weaves through (drift hint at line23).
 - **South straight**: about 3300 units from the line to the curve, with traffic cones (physics props) down its
   middle.
 - **Banked curve** (south-east corner): a quarter circle round the island's corner. The outer 416 units are banked,
