@@ -2,9 +2,11 @@
 
     blender -b model.blend -P tools/blender/render_model.py -- --out renders/
     blender -b -P tools/blender/render_model.py -- --smd assets_src/<m>/<m>.smd --out renders/ [--buggy] [--texture t.png]
+                [--texture-dir dir ...]
 
 Uses the model in the open .blend, or imports --smd with Blender Source Tools. 1 unit = 1 inch.
 --texture shows that image on every material of the model (its UVs), instead of the materials' flat colours.
+--texture-dir (repeatable) shows <dir>/<material>.png on each material that has one, for models with several.
 `scale` shows the model beside a 72-unit "citizen" box (and with --buggy a 120 x 70 x 50 buggy box).
 Writes <out>/front.png, side.png, 3q.png, scale.png.
 """
@@ -21,7 +23,7 @@ BUGGY = (120, 70, 50)
 
 def parse():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    opts = {"out": None, "smd": None, "buggy": False, "texture": None}
+    opts = {"out": None, "smd": None, "buggy": False, "texture": None, "texture_dirs": []}
     it = iter(argv)
     for a in it:
         if a == "--out":
@@ -32,11 +34,13 @@ def parse():
             opts["buggy"] = True
         elif a == "--texture":
             opts["texture"] = next(it)
+        elif a == "--texture-dir":
+            opts["texture_dirs"].append(next(it))
         else:
             sys.exit("unknown option " + a)
     if not opts["out"]:
         sys.exit("usage: blender -b [model.blend] -P render_model.py -- --out <dir> [--smd f.smd] [--buggy]"
-                 " [--texture t.png]")
+                 " [--texture t.png] [--texture-dir dir ...]")
     return opts
 
 
@@ -70,16 +74,21 @@ def ref_box(name, size, x, color, label):
     return [box, txt]
 
 
-def apply_texture(objs, path):
-    """Put the image on every material of objs as the active image node, which workbench's TEXTURE colour shows."""
-    image = bpy.data.images.load(os.path.abspath(path))
+def apply_texture(objs, path, dirs=()):
+    """Put the image on every material of objs as the active image node, which workbench's TEXTURE colour shows.
+    A <dir>/<material>.png in one of dirs wins over path for that material."""
+    image = bpy.data.images.load(os.path.abspath(path)) if path else None
     for o in objs:
         if not o.data.materials:
             o.data.materials.append(bpy.data.materials.new("texture"))
         for mat in o.data.materials:
+            found = [os.path.join(d, mat.name + ".png") for d in dirs if os.path.isfile(os.path.join(d, mat.name + ".png"))]
+            img = bpy.data.images.load(os.path.abspath(found[0])) if found else image
+            if not img:
+                continue
             mat.use_nodes = True
             node = mat.node_tree.nodes.new("ShaderNodeTexImage")
-            node.image = image
+            node.image = img
             mat.node_tree.nodes.active = node
 
 
@@ -115,8 +124,8 @@ def main():
     model = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     if not model:
         sys.exit("no mesh objects to render")
-    if opts["texture"]:
-        apply_texture(model, opts["texture"])
+    if opts["texture"] or opts["texture_dirs"]:
+        apply_texture(model, opts["texture"], opts["texture_dirs"])
     lo, hi = bounds(model)
     size, centre = hi - lo, (hi + lo) / 2
 
@@ -124,7 +133,7 @@ def main():
     sc.render.engine = "BLENDER_WORKBENCH"
     sc.render.resolution_x = sc.render.resolution_y = 768
     sc.display.shading.light = "STUDIO"
-    sc.display.shading.color_type = "TEXTURE" if opts["texture"] else "MATERIAL"
+    sc.display.shading.color_type = "TEXTURE" if opts["texture"] or opts["texture_dirs"] else "MATERIAL"
     sc.display.shading.show_cavity = True
     sc.world = bpy.data.worlds.new("w")
     sc.world.color = (0.55, 0.57, 0.6)

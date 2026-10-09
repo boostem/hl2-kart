@@ -34,6 +34,7 @@ ConVar kart_min_players( "kart_min_players", "1", FCVAR_NOTIFY, "Karts needed be
 ConVar kart_waiting_time( "kart_waiting_time", "3", FCVAR_NOTIFY, "Seconds to wait once kart_min_players karts are in before the countdown, so karts still loading make the grid.", true, 0, false, 0 );
 ConVar kart_countdown_time( "kart_countdown_time", "3", FCVAR_NOTIFY, "Seconds the karts are held on the grid before the race starts.", true, 0, true, 10 );
 ConVar kart_finish_timeout( "kart_finish_timeout", "30", FCVAR_NOTIFY, "Seconds the other karts have to finish once the first one has; then they are finished for them.", true, 0, false, 0 );
+ConVar kart_races_per_map( "kart_races_per_map", "1", FCVAR_NOTIFY, "Races run on a map before the server goes on to the next map of the mapcycle (a one-entry cycle restarts the map).", true, 1, false, 0 );
 ConVar kart_results_time( "kart_results_time", "10", FCVAR_NOTIFY, "Seconds the results are shown before the next race (or the next map once mp_timelimit has run out).", true, 0, false, 0 );
 
 static void KartFormatTime( float flSeconds, char *pszOut, int nSize )
@@ -167,7 +168,9 @@ void CHL2MPRules::KartRaceThink( void )
 		if ( gpGlobals->curtime < m_flKartStateEndTime )
 			break;
 
-		if ( GetMapRemainingTime() < 0 )
+		m_iKartRacesDone++;
+
+		if ( GetMapRemainingTime() < 0 || m_iKartRacesDone >= kart_races_per_map.GetInt() )
 		{
 			GoToIntermission();
 			break;

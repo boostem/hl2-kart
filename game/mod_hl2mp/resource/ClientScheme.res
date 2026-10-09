@@ -44,6 +44,10 @@ Scheme
 		"KartRed"			"230 40 20 255"
 		"KartGreen"			"80 220 60 255"
 		"KartPanelBg"		"0 0 0 110"
+		// Mini-turbo tiers 1-3, matching the drift spark colors: ice blue, amber, magenta.
+		"KartTier1"			"90 180 255 255"
+		"KartTier2"			"255 160 40 255"
+		"KartTier3"			"255 60 200 255"
 	}
 	
 	///////////////////// BASE SETTINGS ////////////////////////

@@ -84,6 +84,10 @@ extern ConVar kart_boost_decay;
 // patches), exhaust, vehicle_driver_eyes and item_hold (behind the kart).
 #define KART_DEFAULT_MODEL		"models/kart/kart_racer.mdl"
 
+// The kart driver's seated animations (assets_src/kart_driver/), played on the
+// driver's own player model by bone name. Precached by the server.
+#define KART_DRIVER_ANIMS		"models/kart/driver_anims.mdl"
+
 // The scrap kart (assets_src/kart_scrap/), the default before the racer kart.
 // Still precached for kart_model.
 #define KART_SCRAP_MODEL		"models/kart/kart_scrap.mdl"

@@ -21,6 +21,7 @@ extern ISoundEmitterSystemBase *soundemitterbase;
 
 ConVar kart_debug_server( "kart_debug_server", "0", 0, "1: draw kart race checkpoints, the finish line, grid slots and each kart model's attachments with debug overlays, and log checkpoint and boost pad touches. 2: also draw the bots' racing line." );
 
+ConVar kart_laps( "kart_laps", "0", FCVAR_NOTIFY, "Laps per race, overriding the kart_race_manager laps keyvalue. 0 uses the map's value.", true, 0, true, KART_MAX_LAPS );
 ConVar kart_wrongway_time( "kart_wrongway_time", "1", FCVAR_NOTIFY, "Seconds a kart has to face or drive against the track before it is told it is going the wrong way.", true, 0, false, 0 );
 
 // Seconds a wrong-way kart has to face forward again before the warning clears.
@@ -262,6 +263,35 @@ void CKartBoostPad::StartTouch( CBaseEntity *pOther )
 }
 
 // ##################################################################################
+//	>> kart_start_lights
+// ##################################################################################
+#define KART_START_LIGHTS_MODEL	"models/kart/props/start_lights.mdl"
+
+LINK_ENTITY_TO_CLASS( kart_start_lights, CKartStartLights );
+
+void CKartStartLights::Precache( void )
+{
+	if ( GetModelName() == NULL_STRING )
+	{
+		SetModelName( AllocPooledString( KART_START_LIGHTS_MODEL ) );
+	}
+
+	PrecacheModel( STRING( GetModelName() ) );
+
+	BaseClass::Precache();
+}
+
+void CKartStartLights::Spawn( void )
+{
+	Precache();
+
+	// Solid to karts, like the other track props.
+	SetSolid( SOLID_VPHYSICS );
+
+	BaseClass::Spawn();
+}
+
+// ##################################################################################
 //	>> kart_start
 // ##################################################################################
 LINK_ENTITY_TO_CLASS( kart_start, CKartStart );
@@ -391,6 +421,11 @@ void CKartRaceManager::Spawn( void )
 	g_pKartRaceManager = this;
 
 	Precache();
+
+	if ( kart_laps.GetInt() > 0 )
+	{
+		m_iLaps = kart_laps.GetInt();
+	}
 
 	if ( m_iLaps < 1 )
 	{

@@ -244,6 +244,7 @@ CHL2MPRules::CHL2MPRules()
 	m_nKartRaceState = KART_RACE_STATE_NONE;
 	m_flKartStateEndTime = 0.0f;
 	m_iKartCountdownTick = 0;
+	m_iKartRacesDone = 0;
 	m_bKartRestartPending = false;
 
 	// Kart movement tuning lives in a cfg so it can be changed without a rebuild.

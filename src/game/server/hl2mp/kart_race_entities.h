@@ -24,6 +24,7 @@
 #endif
 
 #include "triggers.h"
+#include "props.h"
 #include "kart_race_shared.h"
 #include "kart_racing_line.h"
 
@@ -113,6 +114,30 @@ private:
 
 	// Fired on each boost; the activator is the kart.
 	COutputEvent m_OnBoost;
+};
+
+//-----------------------------------------------------------------------------
+// kart_start_lights: the start-light tower (models/kart/props/start_lights.mdl
+// unless the map sets another model), a solid prop_dynamic. Its skin picks the
+// lit lamp: KART_START_LIGHTS_OFF, _RED, _YELLOW or _GREEN.
+//-----------------------------------------------------------------------------
+enum
+{
+	KART_START_LIGHTS_OFF = 0,
+	KART_START_LIGHTS_RED,
+	KART_START_LIGHTS_YELLOW,
+	KART_START_LIGHTS_GREEN,
+};
+
+class CKartStartLights : public CDynamicProp
+{
+	DECLARE_CLASS( CKartStartLights, CDynamicProp );
+
+public:
+	virtual void Precache( void );
+	virtual void Spawn( void );
+
+	void SetLights( int iSkin ) { m_nSkin = iSkin; }
 };
 
 //-----------------------------------------------------------------------------

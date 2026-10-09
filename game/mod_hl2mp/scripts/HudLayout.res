@@ -799,16 +799,22 @@
 		"enabled"		"1"
 	}
 
-	// Speed, bottom right
+	// Speed, drift charge and boost, bottom right (CKartSpeedo,
+	// hl2mp/kart_hud_speedo.cpp): the speed over its bar, then the DRIFT and
+	// BOOST bars, label_wide in from the left.
 	KartSpeedo
 	{
 		"fieldName"		"KartSpeedo"
-		"xpos"			"r136"
-		"ypos"			"r72"
-		"wide"			"120"
-		"tall"			"56"
+		"xpos"			"r176"
+		"ypos"			"r104"
+		"wide"			"160"
+		"tall"			"88"
 		"visible"		"1"
 		"enabled"		"1"
+		"bar_tall"		"6"
+		"row_gap"		"4"
+		"label_wide"	"44"
+		"label_gap"		"4"
 	}
 
 	// Countdown, final lap, finish: upper center

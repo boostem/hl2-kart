@@ -47,13 +47,28 @@
 ]
 
 @SolidClass base(Trigger) color(0 255 255) = kart_boost_pad :
-	"Boost pad: a kart driving onto it gets a speed boost. Only entering the pad counts, so a kart that stops on it is not boosted again until it leaves and comes back after 'Cooldown'. The trigger is invisible: paint the road under it with a bright material such as dev/dev_hazzardstripe01a or effects/com_shield002a, or an overlay. Make it a thin brush on the road surface, across the line karts take."
+	"Boost pad: a kart driving onto it gets a speed boost. Only entering the pad counts, so a kart that stops on it is not boosted again until it leaves and comes back after 'Cooldown'. The trigger is invisible: show it with the boost pad model (a prop_static of models/kart/props/boost_pad.mdl, 128 x 96, its chevrons pointing the way karts go, along the prop's facing), or paint the road under it with a bright material such as dev/dev_hazzardstripe01a or effects/com_shield002a, or an overlay. Make it a thin brush on the road surface, across the line karts take."
 [
 	boost_duration(float) : "Boost duration" : "1.0" : "Seconds the boost lasts. A boost taken while boosting adds to what is left."
 	boost_scale(float) : "Boost speed scale" : "1.4" : "Boost speed as a multiple of the kart's top speed (kart_max_speed)."
 	cooldown(float) : "Cooldown" : "1.0" : "Seconds before this pad can boost the same kart again."
 
 	output OnBoost(void) : "Fired each time the pad boosts a kart; activator is the kart."
+]
+
+@PointClass base(Targetname, Parentname, Angles) studio("models/kart/props/start_lights.mdl") color(255 160 0) = kart_start_lights :
+	"Start-light tower: a solid prop with three lamps facing its front (the facing arrow). Its skin picks the lit lamp. Place it beside or above the grid, facing the karts."
+[
+	model(studio) : "World model" : "" : "Leave empty for models/kart/props/start_lights.mdl."
+	skin(choices) : "Lamps" : 0 : "Which lamp is lit." =
+	[
+		0 : "All off"
+		1 : "Red"
+		2 : "Yellow"
+		3 : "Green"
+	]
+
+	input skin(integer) : "Light a lamp: 0 all off, 1 red, 2 yellow, 3 green."
 ]
 
 @PointClass base(Targetname) color(0 255 0) size(-8 -8 -8, 8 8 8) line(0 255 0, targetname, next) = kart_path_node :
