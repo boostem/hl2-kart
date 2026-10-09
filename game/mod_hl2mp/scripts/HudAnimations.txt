@@ -870,3 +870,12 @@ event KartPositionPulse
 	Animate KartPosition	TextColor	"KartWhite"	Deaccel	0.05	0.6
 	Animate KartPosition	Blur		"0"			Deaccel	0.05	0.6
 }
+
+// A new best lap (CKartTimer): the BEST row flashes amber, then settles back.
+event KartTimerBestLap
+{
+	Animate KartTimer	BestFlash	"1"		Linear	0.0		0.05
+	Animate KartTimer	BestFlash	"0"		Linear	0.25	0.05
+	Animate KartTimer	BestFlash	"1"		Linear	0.5		0.05
+	Animate KartTimer	BestFlash	"0"		Deaccel	0.75	1.0
+}

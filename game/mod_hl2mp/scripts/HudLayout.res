@@ -772,14 +772,14 @@
 		"enabled"		"1"
 	}
 
-	// Race and lap time, under the lap
+	// Race, lap and best lap time, top right (CKartTimer, hl2mp/kart_hud_race.cpp)
 	KartTimer
 	{
 		"fieldName"		"KartTimer"
-		"xpos"			"16"
-		"ypos"			"48"
-		"wide"			"120"
-		"tall"			"24"
+		"xpos"			"r156"
+		"ypos"			"12"
+		"wide"			"140"
+		"tall"			"48"
 		"visible"		"1"
 		"enabled"		"1"
 	}
