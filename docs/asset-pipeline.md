@@ -39,6 +39,47 @@ afterwards:
 tools/venv/bin/python tools/wav_loop.py <out.wav>   # adds a cue point at sample 0
 ```
 
+### Kart soundscript entries
+
+Every `Kart.*` entry in `game/mod_hl2mp/scripts/game_sounds_kart.txt` plays Source content by path (tier 1: no files
+are added to the repository, see `docs/valve-content.md`), so none needs a `CREDITS.md` row. Volumes run 0.5-1.0 and
+sound levels 70-85 dB for in-world sounds (`SNDLVL_NONE` for HUD sounds), in line with similar sounds. The
+`Kart.Music.*` entries play `#music/*.mp3` from the HL2 content.
+
+| Entry | Source file(s) |
+| --- | --- |
+| `Kart.EngineIdle` | `vehicles/v8/v8_idle_loop1.wav` |
+| `Kart.EngineRev` | `vehicles/v8/v8_firstgear_rev_loop1.wav` |
+| `Kart.Skid` | `vehicles/v8/skid_normalfriction.wav` |
+| `Kart.Impact` | `vehicles/v8/vehicle_impact_medium1.wav`, `vehicles/v8/vehicle_impact_medium2.wav`, `vehicles/v8/vehicle_impact_medium3.wav`, `vehicles/v8/vehicle_impact_medium4.wav` |
+| `Kart.ItemPickup` | `items/ammocrate_open.wav` |
+| `Kart.ItemRespawn` | `items/suitchargeok1.wav` |
+| `Kart.RouletteTick` | `buttons/lightswitch2.wav` |
+| `Kart.Checkpoint` | `buttons/blip1.wav` |
+| `Kart.LapComplete` | `buttons/button3.wav` |
+| `Kart.Respawn` | `physics/metal/metal_box_impact_hard1.wav`, `physics/metal/metal_box_impact_hard2.wav`, `physics/metal/metal_box_impact_hard3.wav` |
+| `Kart.HitImpact` | `physics/metal/metal_box_impact_hard1.wav`, `physics/metal/metal_box_impact_hard2.wav`, `physics/metal/metal_box_impact_hard3.wav` |
+| `Kart.HitSpinout` | `vehicles/v8/vehicle_rollover1.wav`, `vehicles/v8/vehicle_rollover2.wav` |
+| `Kart.BoostPad` | `ambient/machines/thumper_hit.wav` |
+| `Kart.WrongWay` | `buttons/button10.wav` |
+| `Kart.FinalLap` | `buttons/button17.wav` |
+| `Kart.Finish` | `buttons/button14.wav` |
+| `Kart.CountdownBeep` | `buttons/button17.wav` |
+| `Kart.CountdownGo` | `plats/elevbell1.wav` |
+| `Kart.Nitro` | `vehicles/v8/v8_turbo_on_loop1.wav` |
+| `Kart.OilThrow` | `vehicles/airboat/pontoon_splash1.wav` |
+| `Kart.OilLand` | `vehicles/airboat/pontoon_splash2.wav` |
+| `Kart.HubcapThrow` | `weapons/slam/throw.wav` |
+| `Kart.HubcapBounce` | `physics/metal/metal_sheet_impact_hard2.wav`, `physics/metal/metal_sheet_impact_hard6.wav`, `physics/metal/metal_sheet_impact_hard7.wav`, `physics/metal/metal_sheet_impact_hard8.wav` |
+| `Kart.HubcapBreak` | `physics/metal/metal_sheet_impact_hard2.wav`, `physics/metal/metal_sheet_impact_hard6.wav`, `physics/metal/metal_sheet_impact_hard7.wav`, `physics/metal/metal_sheet_impact_hard8.wav` |
+| `Kart.SeekerLaunch` | `npc/roller/mine/combine_mine_deploy1.wav` |
+| `Kart.SeekerLoop` | `npc/roller/mine/rmine_movefast_loop1.wav` |
+| `Kart.SeekerLock` | `npc/roller/mine/rmine_blip1.wav` |
+| `Kart.SeekerHit` | `npc/roller/mine/rmine_shockvehicle1.wav`, `npc/roller/mine/rmine_shockvehicle2.wav` |
+| `Kart.SeekerExpire` | `npc/roller/mine/combine_mine_deactivate1.wav` |
+| `Kart.BufferUp` | `buttons/button1.wav` |
+| `Kart.BufferPop` | `physics/glass/glass_sheet_break1.wav` |
+
 ## Compiling models and textures on Linux
 
 The model and texture compilers only exist as Windows executables, so `tools/wine/` runs them under wine from the
@@ -146,6 +187,8 @@ layout in the script, regenerate the VMF, compile, and commit all three. The VMF
 - No respawn zone: there is no `kart_respawn_zone` entity yet, and the arena is walled with nothing to fall off.
 - **Boost pads**: two `kart_boost_pad` (1.0 s, scale 1.4, 1 s cooldown) on the south straight across the racing line,
   at x 192-448 and x 704-960, each 64 tall over a 4-high `dev/dev_hazzardstripe01a` slab.
+- **Item boxes**: two rows of 5 `kart_item_box`, 160 apart and 48 above the floor: one across the east lane at
+  y 400 (just after the first corner), one across the north lane at x -300 (back straight).
 - **Hairpin** (west lane): two staggered 80-thick concrete barriers at y 600 (from the outer wall) and y -600 (from the
   island), each reaching 800 across the lane, for drift practice; the bots' line weaves through (drift hint at line23).
 - **South straight**: about 3300 units from the line to the curve, with traffic cones (physics props) down its
