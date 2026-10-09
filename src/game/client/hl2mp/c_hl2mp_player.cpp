@@ -870,6 +870,15 @@ const QAngle& C_HL2MP_Player::GetRenderAngles()
 		// The kart body faces its own heading, not the eyes. The local player's is
 		// predicted; for everyone else the server's angles are all we have.
 		float flYaw = IsLocalPlayer() ? m_flKartYaw : GetAbsAngles()[YAW];
+
+		// The karts built for this mod face +X; HL2's jeep faces -Y and would
+		// drive sideways.
+		const model_t *pModel = GetModel();
+		if ( pModel && !V_stricmp( modelinfo->GetModelName( pModel ), KART_PLACEHOLDER_MODEL ) )
+		{
+			flYaw += KART_PLACEHOLDER_YAW;
+		}
+
 		m_angKartRenderAngles.Init( 0.0f, flYaw, 0.0f );
 		return m_angKartRenderAngles;
 	}

@@ -1,0 +1,5 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/kart/kart_racer"
+	"$surfaceprop" "metal"
+}

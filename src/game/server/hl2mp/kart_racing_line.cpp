@@ -336,13 +336,46 @@ bool CKartRacingLine::GetNearestPoint( const Vector &vecPos, KartRacingLinePoint
 	if ( !IsValid() )
 		return false;
 
-	int iBest = 0;
+	NearestOnSegments( vecPos, 0, m_Samples.Count(), point );
+	return true;
+}
+
+bool CKartRacingLine::GetNearestPointNear( const Vector &vecPos, float flDistance, float flWindow, KartRacingLinePoint_t &point ) const
+{
+	if ( !IsValid() )
+		return false;
+
+	const int nSamples = m_Samples.Count();
+	const float flSpacing = m_flLength / nSamples;
+	int nHalf = (int)ceilf( MAX( flWindow, 0.0f ) / flSpacing ) + 1;
+	if ( 2 * nHalf + 1 >= nSamples )
+	{
+		NearestOnSegments( vecPos, 0, nSamples, point );
+		return true;
+	}
+
+	flDistance = fmodf( flDistance, m_flLength );
+	if ( flDistance < 0.0f )
+	{
+		flDistance += m_flLength;
+	}
+
+	int iCenter = clamp( (int)( flDistance / flSpacing ), 0, nSamples - 1 );
+	NearestOnSegments( vecPos, iCenter - nHalf + nSamples, 2 * nHalf + 1, point );
+	return true;
+}
+
+void CKartRacingLine::NearestOnSegments( const Vector &vecPos, int iFirst, int nCount, KartRacingLinePoint_t &point ) const
+{
+	const int nSamples = m_Samples.Count();
+	int iBest = iFirst % nSamples;
 	float tBest = 0.0f;
 	float flBest = FLT_MAX;
-	for ( int i = 0; i < m_Samples.Count(); i++ )
+	for ( int k = 0; k < nCount; k++ )
 	{
+		int i = ( iFirst + k ) % nSamples;
 		const Vector &a = m_Samples[i].pos;
-		const Vector &b = m_Samples[( i + 1 ) % m_Samples.Count()].pos;
+		const Vector &b = m_Samples[( i + 1 ) % nSamples].pos;
 
 		float t;
 		Vector vecClosest;
@@ -358,5 +391,4 @@ bool CKartRacingLine::GetNearestPoint( const Vector &vecPos, KartRacingLinePoint
 	}
 
 	LerpSamples( iBest, tBest, point );
-	return true;
 }

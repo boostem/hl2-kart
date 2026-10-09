@@ -120,6 +120,11 @@ public:
 	float GetKartBoostScale( void ) const { return m_flKartBoostScale; }
 	void KartGiveBoost( float flDuration, float flSpeedScale );
 
+	// Stops the kart and clears its drift, hop, drift charge and boost, heading flYaw.
+	void ResetKartMovement( float flYaw );
+	// Moves the kart to vecOrigin, stopped and heading flYaw (kart bots unsticking).
+	void KartTeleport( const Vector &vecOrigin, float flYaw );
+
 	// Kart race state (see kart_race_shared.h). The race manager drives it.
 	int GetKartLap( void ) const { return m_nKartLap; }
 	int GetKartNextCheckpoint( void ) const { return m_nKartNextCheckpoint; }
