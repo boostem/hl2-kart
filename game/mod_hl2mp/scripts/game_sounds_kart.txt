@@ -191,6 +191,49 @@
 	"wave"			"vehicles/v8/v8_turbo_on_loop1.wav"
 }
 
+// Hubcap (kart_proj_hubcap): the throw, each wall bounce, and breaking on a kart, the last wall or its lifetime
+"Kart.HubcapThrow"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_75dB"
+	"pitch"			"95,105"
+
+	"wave"			"weapons/slam/throw.wav"
+}
+
+"Kart.HubcapBounce"
+{
+	"channel"		"CHAN_BODY"
+	"volume"		"0.9"
+	"soundlevel"	"SNDLVL_80dB"
+	"pitch"			"100,115"
+
+	"rndwave"
+	{
+		"wave"		"physics/metal/metal_sheet_impact_hard2.wav"
+		"wave"		"physics/metal/metal_sheet_impact_hard6.wav"
+		"wave"		"physics/metal/metal_sheet_impact_hard7.wav"
+		"wave"		"physics/metal/metal_sheet_impact_hard8.wav"
+	}
+}
+
+"Kart.HubcapBreak"
+{
+	"channel"		"CHAN_BODY"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_80dB"
+	"pitch"			"85,95"
+
+	"rndwave"
+	{
+		"wave"		"physics/metal/metal_sheet_impact_hard2.wav"
+		"wave"		"physics/metal/metal_sheet_impact_hard6.wav"
+		"wave"		"physics/metal/metal_sheet_impact_hard7.wav"
+		"wave"		"physics/metal/metal_sheet_impact_hard8.wav"
+	}
+}
+
 // Race music (kart_race_manager "music"), played by each client to itself from GO (kart_music.cpp).
 // One entry per track, named Kart.Music.<file name>; volume is scaled by kart_music_volume.
 // HL2 score by path; listen before picking a track for a map (docs/valve-content.md lists them all).

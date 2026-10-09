@@ -10,6 +10,7 @@
 
 #ifdef GAME_DLL
 #include "hl2mp_player.h"
+#include "kart_proj_hubcap.h"
 #include "tier1/fmtstr.h"
 #endif
 
@@ -19,6 +20,7 @@
 #ifdef GAME_DLL
 static bool KartItemUse_Stub( CHL2MP_Player *pPlayer, bool bBackward );
 static bool KartItemUse_Nitro( CHL2MP_Player *pPlayer, bool bBackward );
+static bool KartItemUse_Hubcap( CHL2MP_Player *pPlayer, bool bBackward );
 #define KART_ITEM_USE( fn )	, fn
 #else
 #define KART_ITEM_USE( fn )
@@ -34,10 +36,10 @@ const KartItemInfo_t g_KartItems[KART_ITEM_COUNT] =
 {
 	//	name			display name	backward	weight: leader front middle back	count: leader front middle back
 	{ "none",			"None",			false,		{  0,  0,  0,  0 },					{ 0, 0, 0, 0 }	KART_ITEM_USE( NULL ) },
-	{ "hubcap",			"Hubcap",		true,		{ 30, 35, 25, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
+	{ "hubcap",			"Hubcap",		true,		{ 30, 35, 35, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Hubcap ) },
 	{ "oil_slick",		"Oil Slick",	true,		{ 45, 25, 10,  5 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
-	{ "nitro_can",		"Nitro Can",	false,		{  0, 15, 30, 35 },					{ 1, 1, 2, 3 }	KART_ITEM_USE( KartItemUse_Nitro ) },
-	{ "seeker",			"Seeker",		false,		{  0, 15, 25, 30 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
+	{ "nitro_can",		"Nitro Can",	false,		{  0, 15, 25, 35 },					{ 1, 1, 2, 3 }	KART_ITEM_USE( KartItemUse_Nitro ) },
+	{ "seeker",			"Seeker",		false,		{  0, 15, 20, 30 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
 	{ "buffer",			"Buffer",		false,		{ 25, 10, 10, 20 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
 };
 
@@ -194,6 +196,12 @@ static bool KartItemUse_Nitro( CHL2MP_Player *pPlayer, bool bBackward )
 	pPlayer->KartGiveBoost( kart_nitro_duration.GetFloat(), kart_nitro_scale.GetFloat() );
 	pPlayer->EmitSound( "Kart.Nitro" );
 	return true;
+}
+
+// Hubcap: thrown along the kart's heading, see kart_proj_hubcap.
+static bool KartItemUse_Hubcap( CHL2MP_Player *pPlayer, bool bBackward )
+{
+	return CKartProjHubcap::Throw( pPlayer, bBackward );
 }
 
 bool KartPlayerHasItem( CHL2MP_Player *pPlayer )
