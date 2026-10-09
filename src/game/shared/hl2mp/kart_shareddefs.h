@@ -95,7 +95,6 @@ enum KartHitType
 // Buffer item: a shield that takes the next hit in place of the kart.
 #define KART_SOUND_BUFFER_UP	"Kart.BufferUp"		// the shield goes up
 #define KART_SOUND_BUFFER_POP	"Kart.BufferPop"	// it takes a hit and breaks
-#define KART_BUFFER_MATERIAL	"effects/com_shield002a"	// the shield drawn around the kart (Valve content)
 
 // Below this speed (units per second, either way) the kart counts as stopped:
 // holding the brake there starts the reverse delay.

@@ -84,9 +84,9 @@
 	]
 ]
 
-@PointClass base(Targetname) studio("models/items/item_item_crate.mdl") size(-16 -16 -16, 16 16 16) color(255 0 255) = kart_item_box :
-	"Item box. Floats, spins and bobs where it is placed; a kart driving through it gets a random item, and the box vanishes and comes back after 'Respawn time'. Only karts take it, and only when they hold no item. Place it so its center is about 24 units above the track, in rows across the track width."
+@PointClass base(Targetname) studio("models/kart/items/item_box.mdl") size(-10 -10 0, 10 10 20) color(255 0 255) = kart_item_box :
+	"Item box. Floats, spins and bobs where it is placed; a kart driving through it gets a random item, and the box vanishes and comes back after 'Respawn time'. Only karts take it, and only when they hold no item. Its origin is the bottom of the 20-unit box: place it about 14 units above the track, so its center is about 24 up, in rows across the track width."
 [
 	respawn_time(float) : "Respawn time" : "3" : "Seconds before a taken box comes back."
-	scale(float) : "Model scale" : "0.6" : "Scale of the box model. The pickup area grows with it."
+	scale(float) : "Model scale" : "1" : "Scale of the box model. The pickup area grows with it."
 ]

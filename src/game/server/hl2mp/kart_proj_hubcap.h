@@ -34,10 +34,6 @@
 
 class CHL2MP_Player;
 
-// Placeholder model until the custom one (M8): an HL2 car wheel at half size.
-// Valve content, referenced by path only.
-#define KART_HUBCAP_MODEL		"models/props_vehicles/carparts_wheel01a.mdl"
-
 //-----------------------------------------------------------------------------
 // kart_proj_hubcap
 //-----------------------------------------------------------------------------

@@ -1,0 +1,18 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/kart/items/item_box_symbol"
+	"$surfaceprop" "metal_box"
+	"$selfillum" "1"
+	"$selfillumtint" "[1 1 1]"
+	
+	"Proxies"
+	{
+		"Sine"
+		{
+			"sinemin" "0.6"
+			"sinemax" "1.4"
+			"sineperiod" "1.2"
+			"resultVar" "$selfillumtint"
+		}
+	}
+}

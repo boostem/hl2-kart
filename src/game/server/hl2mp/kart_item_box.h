@@ -19,9 +19,7 @@
 
 class CHL2MP_Player;
 
-// Placeholder model until the custom one (M8): HL2's item crate. Valve
-// content, referenced by path only.
-#define KART_ITEM_BOX_MODEL		"models/items/item_item_crate.mdl"
+// Model: KartItem_GetModel( KART_ITEM_NONE ), in the item table.
 
 //-----------------------------------------------------------------------------
 // kart_item_box

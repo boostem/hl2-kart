@@ -1,0 +1,5 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/kart/items/item_box"
+	"$surfaceprop" "metal_box"
+}

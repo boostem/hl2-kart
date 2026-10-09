@@ -1,0 +1,6 @@
+"UnlitGeneric"
+{
+	"$basetexture" "models/kart/items/seeker_glow"
+	"$model" "1"
+	"$additive" "1"
+}

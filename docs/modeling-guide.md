@@ -69,6 +69,24 @@ Attach the PNGs to the ticket; don't commit them.
   angles, the steering wheel follows at `cl_kart_steer_ratio`, and in a drift the wheels counter-steer. Attachments
   `grip_l` and `grip_r` on the steering wheel rim are where the driver's hands go. Tuning: `cl_kart_steer_angle`,
   `cl_kart_steer_speed`, `cl_kart_steer_drift_counter`. A model without these bones stays rigid.
+- `assets_src/items/`: the item models in `models/kart/items/`, all built by `build_items.py` with the dressing kit's
+  shapes and baked finishes (`assets_src/props/kit.py`); `make_materials.py` draws the other textures and writes the
+  materials. The item table in `kart_items.cpp` holds every path (the `none` row: the item box).
+
+  | Model | Size (x y z) | Origin | Used by |
+  | --- | --- | --- | --- |
+  | `item_box.mdl` | 21 x 21 x 21 | bottom | `kart_item_box`: an orange steel-banded crate, a glowing (`$selfillum`, pulsing) amber hazard diamond with a bolt on each side and the top. Scale 1 by default. |
+  | `hubcap.mdl` | 18 x 18 x 3 | centre, lying flat | `kart_proj_hubcap`, spun by its yaw. Chrome (`$envmap`). |
+  | `nitro_can.mdl` | 8 x 8 x 17 | bottom | The spent can tossed off the back of the kart when a Nitro Can is used (a client gib, `te->BreakModel`). Dented blue bottle, brass valve, gauge. |
+  | `oil_slick.mdl` | 69 x 67 x 0 | on the ground | `kart_hazard_oil`: a flat puddle, translucent with a normal map and phong sheen. The client scales it (a blob in the air, spreading as it lands) and fades it out. |
+  | `seeker.mdl` | 18 x 16 x 12 | centre | `kart_proj_seeker`: a small blue-grey drone with a glowing eye at the front, swept fins and a thruster. |
+  | `buffer.mdl` | 146 x 102 x 12 | centre | The Buffer shield (`C_KartBuffer`, client only), a band round the kart at the hull's centre: additive, a scrolling hexagon shimmer. |
+
+  Rebuild all (or name some):
+
+  ```sh
+  assets_src/items/build_all.sh [item ...]
+  ```
 - `assets_src/kart_driver/`: the kart driver's seated animations (`models/kart/driver_anims.mdl`), an
   animation-only model for the ValveBiped skeleton. `kart_drive_idle` sits the driver in the racer kart (pelvis on
   `cl_kart_driver_seat`, feet on `cl_kart_driver_feet`, palms on `grip_l`/`grip_r` at ten to two) and blends over
