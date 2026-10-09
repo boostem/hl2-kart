@@ -44,3 +44,23 @@
 		"wave"	"vehicles/v8/vehicle_impact_medium4.wav"
 	}
 }
+
+// Item boxes (kart_item_box)
+"Kart.ItemPickup"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_75dB"
+	"pitch"			"100,110"
+
+	"wave"			"items/ammocrate_open.wav"
+}
+
+"Kart.ItemRespawn"
+{
+	"channel"		"CHAN_ITEM"
+	"volume"		"0.7"
+	"soundlevel"	"SNDLVL_70dB"
+
+	"wave"			"items/suitchargeok1.wav"
+}

@@ -22,6 +22,7 @@ How to build a kart track in Hammer (Windows).
 | `kart_start` | point | A grid slot (`grid`, lowest first). Karts spawn on the lowest free slot. |
 | `kart_checkpoint` | brush trigger | Passed in `index` order (1, 2, 3...). |
 | `kart_finish` | brush trigger | The start/finish line (checkpoint 0). |
+| `kart_item_box` | point | A floating item box. Keyvalues `respawn_time` (3 s), `scale` (0.6). Karts without an item take it; it comes back after `respawn_time`. |
 
 ## 3. Track rules
 
@@ -30,6 +31,7 @@ How to build a kart track in Hammer (Windows).
 - 8 `kart_start` slots in a 2x4 grid, 96 units apart, facing the track direction, with `grid` 0-7.
 - Checkpoints about every 1500 units, plus one before and one after every shortcut, so a shortcut cannot skip a checkpoint.
 - Checkpoint and finish triggers span the whole track width, wall to wall, and are tall, so karts cannot jump over them.
+- Item boxes in rows of 3-5 across the track width, centered about 24 units above the road, a few per lap.
 - Put a kill plane (`trigger_hurt`, or the M2 respawn trigger) below the track.
 
 ## 4. Materials and props
