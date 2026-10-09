@@ -111,6 +111,37 @@
 	}
 }
 
+// Item hits (CHL2MP_Player::KartApplyHit), heard by everyone near: the impact on any hit,
+// and a spin-out tumbles on top of it
+"Kart.HitImpact"
+{
+	"channel"		"CHAN_BODY"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_85dB"
+	"pitch"			"85,95"
+
+	"rndwave"
+	{
+		"wave"		"physics/metal/metal_box_impact_hard1.wav"
+		"wave"		"physics/metal/metal_box_impact_hard2.wav"
+		"wave"		"physics/metal/metal_box_impact_hard3.wav"
+	}
+}
+
+"Kart.HitSpinout"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.9"
+	"soundlevel"	"SNDLVL_80dB"
+	"pitch"			"95,110"
+
+	"rndwave"
+	{
+		"wave"		"vehicles/v8/vehicle_rollover1.wav"
+		"wave"		"vehicles/v8/vehicle_rollover2.wav"
+	}
+}
+
 // Driving onto a boost pad (kart_boost_pad), from the kart, heard by everyone near
 "Kart.BoostPad"
 {

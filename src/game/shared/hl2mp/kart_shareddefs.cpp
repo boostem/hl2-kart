@@ -61,6 +61,15 @@ ConVar kart_turbo_tier3_duration( "kart_turbo_tier3_duration", "1.6", KART_TUNIN
 ConVar kart_boost_scale( "kart_boost_scale", "1.3", KART_TUNING_FLAGS, "Speed of a drift mini-turbo boost, as a multiple of kart_max_speed." );
 ConVar kart_boost_decay( "kart_boost_decay", "400", KART_TUNING_FLAGS, "How fast a kart above kart_max_speed (after a boost) slows back down to it, in units per second squared." );
 
+// Hit reactions
+ConVar kart_spinout_time( "kart_spinout_time", "1.0", KART_TUNING_FLAGS, "Seconds a kart spins out for when an item hits it, with no inputs." );
+ConVar kart_spinout_turns( "kart_spinout_turns", "2", KART_TUNING_FLAGS, "Full turns the kart's body spins through during a spin-out (drawn only: the heading does not change)." );
+ConVar kart_spinout_speed_scale( "kart_spinout_speed_scale", "0.5", KART_TUNING_FLAGS, "Fraction of its speed a kart keeps when it starts to spin out." );
+ConVar kart_spinout_decel( "kart_spinout_decel", "500", KART_TUNING_FLAGS, "How fast a spinning-out kart skids to a stop, in units per second squared." );
+ConVar kart_stun_time( "kart_stun_time", "0.5", KART_TUNING_FLAGS, "Seconds a kart is stunned for: it steers and drives, but cannot hop or drift and is held to kart_stun_speed_scale." );
+ConVar kart_stun_speed_scale( "kart_stun_speed_scale", "0.5", KART_TUNING_FLAGS, "A stunned kart's speed is cut to this fraction when hit and held under this fraction of kart_max_speed until the stun ends." );
+ConVar kart_hit_immunity( "kart_hit_immunity", "1.0", KART_TUNING_FLAGS, "Seconds after a spin-out or stun ends during which the kart cannot be hit again." );
+
 const color32 g_KartColors[KART_COLOR_COUNT] =
 {
 	{ 230,  60,  60, 255 },	// red

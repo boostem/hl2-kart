@@ -92,4 +92,11 @@
 		"item"		"byte"		// KartItem_t (kart_items.h)
 		"backward"	"bool"		// thrown backwards
 	}
+
+	"kart_hit"					// an item hit a kart: it spins out or is stunned
+	{
+		"userid"	"short"		// user ID of the kart hit
+		"attacker"	"short"		// user ID of the kart that threw the item, 0 for none
+		"type"		"byte"		// KartHitType (kart_shareddefs.h): 1 spin-out, 2 stun
+	}
 }

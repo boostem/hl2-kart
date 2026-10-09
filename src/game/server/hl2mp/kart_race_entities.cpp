@@ -237,7 +237,8 @@ void CKartBoostPad::StartTouch( CBaseEntity *pOther )
 		return;
 
 	CHL2MP_Player *pPlayer = ToHL2MPPlayer( pOther );
-	if ( !pPlayer || !pPlayer->IsInKart() || !pPlayer->IsAlive() )
+	// A hit stops any boost (CKartGameMovement), so a kart that is hit gets nothing.
+	if ( !pPlayer || !pPlayer->IsInKart() || !pPlayer->IsAlive() || pPlayer->IsKartHit() )
 		return;
 
 	int iSlot = pPlayer->entindex();
