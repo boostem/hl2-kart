@@ -51,6 +51,8 @@ On map load the race manager builds a smooth closed spline (Catmull-Rom) through
 
 To check it in game: `sv_cheats 1`, then `kart_debug_server 2` draws the line in green, its width either side and each node's settings. `kart_race_dump` lists the nodes in line order with their distance along the lap.
 
+Then drive it with bots: `kart_bot_add [name]` adds one (`kart_bot_kick [name|all]` removes them, `kart_bot_quota` keeps a number of them in the game). Bots aim at the line about 160-384 units ahead, slow down for low `speed_scale` and for sharp stretches, drift where the line turns more than `kart_bot_drift_angle` (55) degrees within `kart_bot_drift_distance` (512) units (half the angle past a `drift` node), back up when they make no progress for 2 s and are put back on the line after 8 s. `kart_bot_debug 1` draws each bot's aim point (yellow, orange while drifting, red while backing up), the line it plans along in cyan and what it is doing. A map without a racing line leaves bots standing on the grid.
+
 ## 5. The race flow
 
 On a map with a `kart_race_manager`, a `kart_finish` and at least one checkpoint, the game runs races instead of deathmatch (no frag limit, no teams); a map without them is free drive.

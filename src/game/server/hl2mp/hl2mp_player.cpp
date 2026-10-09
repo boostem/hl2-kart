@@ -450,14 +450,7 @@ void CHL2MP_Player::Spawn(void)
 	{
 		// The kart is the player: no weapons, no suit, no damage yet (M1), and it is
 		// drawn for the local player too so third person shows the kart.
-		m_flKartSpeed = 0.0f;
-		m_flKartYaw = GetAbsAngles()[YAW];	// spawn point facing
-		m_flKartReverseTime = 0.0f;
-		m_flKartBumpCooldown = 0.0f;
-		m_nKartDriftDir = 0;
-		m_flKartSlipAngle = 0.0f;
-		m_flKartDriftTime = 0.0f;
-		m_flKartHopTime = 0.0f;
+		ResetKartMovement( GetAbsAngles()[YAW] );	// spawn point facing
 		m_Local.m_bForceLocalPlayerDraw = true;
 		m_takedamage = DAMAGE_NO;
 		m_Local.m_iHideHUD |= KART_HIDEHUD_BITS;
@@ -729,6 +722,32 @@ void CHL2MP_Player::SetKartModel( void )
 	ApplyKartColor();
 
 	m_flNextModelChangeTime = gpGlobals->curtime + MODEL_CHANGE_INTERVAL;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: A kart at rest heading flYaw: no speed, drift, slip or hop.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::ResetKartMovement( float flYaw )
+{
+	m_flKartSpeed = 0.0f;
+	m_flKartYaw = flYaw;
+	m_flKartReverseTime = 0.0f;
+	m_flKartBumpCooldown = 0.0f;
+	m_nKartDriftDir = 0;
+	m_flKartSlipAngle = 0.0f;
+	m_flKartDriftTime = 0.0f;
+	m_flKartHopTime = 0.0f;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Puts the kart at vecOrigin, stopped and heading flYaw.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::KartTeleport( const Vector &vecOrigin, float flYaw )
+{
+	QAngle angles( 0.0f, flYaw, 0.0f );
+	Teleport( &vecOrigin, &angles, &vec3_origin );
+	SnapEyeAngles( angles );
+	ResetKartMovement( flYaw );
 }
 
 //-----------------------------------------------------------------------------
