@@ -24,6 +24,8 @@
 //							total time + ( curtime - lap start time ).
 //			late join		joined while a race was running: drives, but has
 //							no position and no laps until the next race.
+//			wrong way		driving against the track for kart_wrongway_time
+//							seconds; cleared once facing forward again.
 //
 //			Race flow, networked on the game rules (CHL2MPRules):
 //
@@ -91,5 +93,8 @@ inline const char *KartRaceStateName( int state )
 // Game sounds (game_sounds_kart.txt), played to the player only.
 #define KART_SOUND_CHECKPOINT		"Kart.Checkpoint"
 #define KART_SOUND_LAP_COMPLETE		"Kart.LapComplete"
+
+// Game sound played at the kart when it is put back on the track, heard by everyone.
+#define KART_SOUND_RESPAWN			"Kart.Respawn"
 
 #endif // KART_RACE_SHARED_H

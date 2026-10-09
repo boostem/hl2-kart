@@ -877,3 +877,12 @@ event KartItemSettle
 	Animate KartItemSlot	Flash		"1"			Linear	0.0		0.0
 	Animate KartItemSlot	Flash		"0"			Deaccel	0.0		0.5
 }
+
+// A new best lap (CKartTimer): the BEST row flashes amber, then settles back.
+event KartTimerBestLap
+{
+	Animate KartTimer	BestFlash	"1"		Linear	0.0		0.05
+	Animate KartTimer	BestFlash	"0"		Linear	0.25	0.05
+	Animate KartTimer	BestFlash	"1"		Linear	0.5		0.05
+	Animate KartTimer	BestFlash	"0"		Deaccel	0.75	1.0
+}

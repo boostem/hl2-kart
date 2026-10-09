@@ -15,6 +15,7 @@
 [
 	laps(integer) : "Laps" : 3 : "Number of laps in a race (minimum 1)."
 	track_name(string) : "Track name" : "" : "Display name of the track."
+	kill_z(string) : "Kill height" : "" : "Karts that fall below this world height are put back at their last checkpoint, like a kart_respawn_zone. Leave empty for none."
 
 	output OnRaceStart(void) : "Fired at GO, when the countdown of each race ends."
 	output OnRaceFinish(void) : "Fired when the first kart finishes; activator is the winner."
@@ -30,10 +31,17 @@
 	"Checkpoint trigger, passed by karts in 'Checkpoint index' order, after kart_finish (index 0). Make it span the whole track width (wall to wall, including any shortcut it guards) and tall enough that a kart cannot jump over it. Place one about every 1500 units and before and after every shortcut."
 [
 	index(integer) : "Checkpoint index" : -1 : "Order along the track: 1 is the first one after the finish line, then 2, 3, and so on up to the last one before the finish line. Indexes must be unique and without gaps."
+	respawn_target(target_destination) : "Respawn target" : "" : "Optional point entity (an info_target with Angles) where karts that hit this checkpoint last are put back on the track, at its position and facing. Without one they respawn on the ground under the trigger's center, facing the next checkpoint."
 ]
 
 @SolidClass base(Trigger) color(255 0 128) = kart_finish :
 	"The start/finish line. Always checkpoint 0 (its index is set automatically). Make it span the whole track width and be tall. Place exactly one."
+[
+	respawn_target(target_destination) : "Respawn target" : "" : "Optional point entity (an info_target with Angles) where karts that crossed the line last are put back on the track, at its position and facing. Without one they respawn on the ground under the trigger's center, facing the next checkpoint."
+]
+
+@SolidClass base(Trigger) color(255 64 0) = kart_respawn_zone :
+	"Kill plane: a kart entering it is put back on the track at the last checkpoint it hit, facing the next one, stopped and frozen for kart_respawn_freeze seconds. Lap and checkpoint progress are kept. Put one below the track and in pits or water karts can't drive out of."
 [
 ]
 

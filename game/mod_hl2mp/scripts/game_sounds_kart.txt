@@ -94,3 +94,19 @@
 
 	"wave"			"buttons/button3.wav"
 }
+
+// Put back on the track at the last checkpoint (CHL2MP_Player::KartRespawnAtCheckpoint), heard by everyone near
+"Kart.Respawn"
+{
+	"channel"		"CHAN_BODY"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_80dB"
+	"pitch"			"95,105"
+
+	"rndwave"
+	{
+		"wave"		"physics/metal/metal_box_impact_hard1.wav"
+		"wave"		"physics/metal/metal_box_impact_hard2.wav"
+		"wave"		"physics/metal/metal_box_impact_hard3.wav"
+	}
+}
