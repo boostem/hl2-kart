@@ -260,6 +260,35 @@ void CKartBoostPad::StartTouch( CBaseEntity *pOther )
 }
 
 // ##################################################################################
+//	>> kart_start_lights
+// ##################################################################################
+#define KART_START_LIGHTS_MODEL	"models/kart/props/start_lights.mdl"
+
+LINK_ENTITY_TO_CLASS( kart_start_lights, CKartStartLights );
+
+void CKartStartLights::Precache( void )
+{
+	if ( GetModelName() == NULL_STRING )
+	{
+		SetModelName( AllocPooledString( KART_START_LIGHTS_MODEL ) );
+	}
+
+	PrecacheModel( STRING( GetModelName() ) );
+
+	BaseClass::Precache();
+}
+
+void CKartStartLights::Spawn( void )
+{
+	Precache();
+
+	// Solid to karts, like the other track props.
+	SetSolid( SOLID_VPHYSICS );
+
+	BaseClass::Spawn();
+}
+
+// ##################################################################################
 //	>> kart_start
 // ##################################################################################
 LINK_ENTITY_TO_CLASS( kart_start, CKartStart );
