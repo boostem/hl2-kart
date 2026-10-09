@@ -24,6 +24,22 @@ Playtest launch line:
 cd game && ./mod_hl2mp_linux64 -windowed -w 1600 -h 900 -novid +sv_cheats 1 +map dm_lockdown
 ```
 
+## Playtesting
+
+Launch with the playtest line above, then in the console:
+
+```
+kart_debug 1          // client overlay: kart mode, speed, yaw, grounded, origin, inputs
+kart_debug_server 1   // server draws each kart's heading line and hull box
+cl_showerror 1        // log prediction errors
+cl_showpos 1
+net_graph 1
+exec kart_tuning      // reload tuning from cfg/kart_tuning.cfg
+```
+
+Report findings in a comment on the ticket, with numbers (the overlay rows) and screenshots.
+If karts misbehave, `kart_enabled 0; kill` respawns you as a normal HL2DM player.
+
 ## Asset policy
 
 - Use existing Source content first, referenced by path. Never copy Valve files into the repo.

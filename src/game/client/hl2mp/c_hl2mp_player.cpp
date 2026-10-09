@@ -391,6 +391,8 @@ void C_HL2MP_Player::UpdateLookAt( void )
 	SetPoseParameter( m_headPitchPoseParam, m_flCurrentHeadPitch );
 }
 
+ConVar kart_debug( "kart_debug", "0", FCVAR_CHEAT, "Draw the kart debug overlay (speed, yaw, grounded, inputs...) top-left." );
+
 void C_HL2MP_Player::ClientThink( void )
 {
 	bool bFoundViewTarget = false;
@@ -433,7 +435,45 @@ void C_HL2MP_Player::ClientThink( void )
 	UpdateIDTarget();
 
 	UpdateKartSounds();
+
 	UpdateKartSkidmarks();
+
+	if ( IsLocalPlayer() && kart_debug.GetBool() )
+	{
+		DrawKartDebugOverlay();
+	}
+}
+
+// One labelled row of the kart debug overlay. Later milestones call this to add rows.
+static int s_nKartDebugRow = 0;
+static void DebugRow( const char *label, const char *fmt, ... )
+{
+	char value[256];
+	va_list args;
+	va_start( args, fmt );
+	Q_vsnprintf( value, sizeof( value ), fmt, args );
+	va_end( args );
+	engine->Con_NPrintf( s_nKartDebugRow++, "%-12s %s", label, value );
+}
+
+void C_HL2MP_Player::DrawKartDebugOverlay( void )
+{
+	s_nKartDebugRow = 10;	// below cl_showpos / net_graph text
+	Vector vecOrigin = GetAbsOrigin();
+	int nButtons = m_nButtons;
+	int nThrottle = ( ( nButtons & IN_FORWARD ) ? 1 : 0 ) - ( ( nButtons & IN_BACK ) ? 1 : 0 );
+	int nSteer = ( ( nButtons & IN_MOVERIGHT ) ? 1 : 0 ) - ( ( nButtons & IN_MOVELEFT ) ? 1 : 0 );
+
+	DebugRow( "kart mode", "%s", m_bKartMode ? "on" : "off" );
+	DebugRow( "speed", "%.1f", m_flKartSpeed );
+	DebugRow( "|velocity|", "%.1f", GetAbsVelocity().Length() );
+	DebugRow( "kart yaw", "%.1f", m_flKartYaw );
+	DebugRow( "camera yaw", "%.1f", m_flKartCamYaw );
+	DebugRow( "grounded", "%s", ( GetFlags() & FL_ONGROUND ) ? "yes" : "no" );
+	DebugRow( "origin", "%.1f %.1f %.1f", vecOrigin.x, vecOrigin.y, vecOrigin.z );
+	DebugRow( "throttle", "%d (W=+1, S=-1)", nThrottle );
+	DebugRow( "steer", "%d (D=+1, A=-1)", nSteer );
+	DebugRow( "pred errors", "set cl_showerror 1 to log them" );
 }
 
 // Top speed the engine pitch is mapped to: the replicated movement convar
