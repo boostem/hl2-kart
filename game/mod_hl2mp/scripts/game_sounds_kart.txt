@@ -153,6 +153,34 @@
 	"wave"			"ambient/machines/thumper_hit.wav"
 }
 
+// Race HUD (CKartWrongWay, CKartBanner), played by the client to the local player only
+"Kart.WrongWay"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.6"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"buttons/button10.wav"
+}
+
+"Kart.FinalLap"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"buttons/button17.wav"
+}
+
+"Kart.Finish"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"buttons/button14.wav"
+}
+
 // Nitro Can use
 "Kart.Nitro"
 {
