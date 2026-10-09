@@ -2,6 +2,8 @@
 
 HL2 Kart is a kart-racing mod built on the Source SDK 2013 multiplayer code (HL2:DM base).
 
+Players: see [`docs/playing.md`](docs/playing.md) (needs Source SDK Base 2013 Multiplayer). Contributors: see [`docs/contributing.md`](docs/contributing.md).
+
 ## Build (Linux)
 
 ```sh
@@ -70,6 +72,8 @@ Settings are in `game/mod_hl2mp/cfg/`: `server.cfg` (hostname, `kart_laps`, `kar
 - Agent-built models are made with Blender scripts under `assets_src/`.
 - Otherwise use CC0/CC-BY assets, with a line in `CREDITS.md`.
 - Ask before using anything NC, ND, SA or with an unclear license.
+
+Every non-Valve file under `game/mod_hl2mp/` needs a `CREDITS.md` row; `tools/release/credits_audit.py` checks it.
 
 See `assets_src/README.md`, `CREDITS.md` and `docs/README.md`.
 

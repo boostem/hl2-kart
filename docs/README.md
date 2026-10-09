@@ -7,5 +7,7 @@ Planned docs, added by later tickets:
 - [`valve-content.md`](valve-content.md): Valve content inventory (paths into the SDK VPKs)
 - [`modeling-guide.md`](modeling-guide.md): Blender build scripts, BST export, scale and the four model renders
 - [`dressing-kit.md`](dressing-kit.md): track props (tyre walls, ramps, finish gantry, start lights, signs, boost pad)
+- [`playing.md`](playing.md): player guide (requirements, install, controls, convars)
+- [`contributing.md`](contributing.md): contributor guide (build, tools, asset policy, credits audit)
 - [`release.md`](release.md): building the release zip and installing it in `sourcemods/`
 - [`multiplayer-testing.md`](multiplayer-testing.md): testing with fake lag, two clients on one machine and a dedicated server
