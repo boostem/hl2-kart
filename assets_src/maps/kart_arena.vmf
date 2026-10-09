@@ -3634,6 +3634,7 @@ entity
 	"targetname" "race"
 	"laps" "3"
 	"track_name" "Kart Arena"
+	"music" "music/hl2_song20_submix0.mp3"
 	"origin" "-1536 -2400 64"
 	editor
 	{

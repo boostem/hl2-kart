@@ -16,6 +16,7 @@
 	laps(integer) : "Laps" : 3 : "Number of laps in a race (minimum 1)."
 	track_name(string) : "Track name" : "" : "Display name of the track."
 	kill_z(string) : "Kill height" : "" : "Karts that fall below this world height are put back at their last checkpoint, like a kart_respawn_zone. Leave empty for none."
+	music(string) : "Music" : "music/hl2_song20_submix0.mp3" : "Race music, played from GO until the player finishes (then a short finish sting). An HL2 track with a Kart.Music.* entry in scripts/game_sounds_kart.txt, by file (music/hl2_song20_submix0.mp3, music/hl2_song20_submix4.mp3, music/hl2_song14.mp3, music/hl2_song16.mp3, music/hl2_song29.mp3, music/hl2_song3.mp3) or by entry name (Kart.Music.hl2_song14). Empty uses music/hl2_song20_submix0.mp3; 'none' plays no music. Players set the volume with kart_music_volume."
 
 	output OnRaceStart(void) : "Fired at GO, when the countdown of each race ends."
 	output OnRaceFinish(void) : "Fired when the first kart finishes; activator is the winner."

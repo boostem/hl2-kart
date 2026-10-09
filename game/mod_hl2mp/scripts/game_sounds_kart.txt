@@ -131,3 +131,70 @@
 
 	"wave"			"vehicles/v8/v8_turbo_on_loop1.wav"
 }
+
+// Race music (kart_race_manager "music"), played by each client to itself from GO (kart_music.cpp).
+// One entry per track, named Kart.Music.<file name>; volume is scaled by kart_music_volume.
+// HL2 score by path; listen before picking a track for a map (docs/valve-content.md lists them all).
+"Kart.Music.hl2_song20_submix0"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song20_submix0.mp3"
+}
+
+"Kart.Music.hl2_song20_submix4"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song20_submix4.mp3"
+}
+
+"Kart.Music.hl2_song14"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song14.mp3"
+}
+
+"Kart.Music.hl2_song16"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song16.mp3"
+}
+
+"Kart.Music.hl2_song29"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song29.mp3"
+}
+
+"Kart.Music.hl2_song3"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song3.mp3"
+}
+
+// Finish sting, played when the local kart crosses the line on its last lap while the track fades out.
+"Kart.Music.Finish"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/stingers/hl1_stinger_song8.mp3"
+}
