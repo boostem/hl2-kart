@@ -10,6 +10,7 @@
 #include "kart_shareddefs.h"
 #include "hl2mp_gamerules.h"
 #include "igamesystem.h"
+#include "kart_items.h"
 #include "GameEventListener.h"
 #include "recipientfilter.h"
 #include "SoundEmitterSystem/isoundemittersystembase.h"
@@ -1140,6 +1141,8 @@ public:
 	CKartRaceSystem() : CAutoGameSystemPerFrame( "CKartRaceSystem" )
 	{
 		m_flNextDebugDraw = 0.0f;
+		m_flNextCountPrint = 0.0f;
+		m_nLastProjectiles = m_nLastHazards = -1;
 	}
 
 	virtual void LevelInitPostEntity( void )
@@ -1155,7 +1158,31 @@ public:
 
 	virtual void FrameUpdatePostEntityThink( void )
 	{
-		if ( !kart_debug_server.GetBool() || gpGlobals->curtime < m_flNextDebugDraw )
+		if ( !kart_debug_server.GetBool() )
+			return;
+
+		// Live kart projectiles and hazards, about once a second
+		if ( gpGlobals->curtime >= m_flNextCountPrint )
+		{
+			m_flNextCountPrint = gpGlobals->curtime + 1.0f;
+			int nProjectiles = 0, nHazards = 0;
+			for ( CBaseEntity *pEnt = gEntList.FindEntityByClassname( NULL, KART_PROJECTILE_CLASSNAMES ); pEnt; pEnt = gEntList.FindEntityByClassname( pEnt, KART_PROJECTILE_CLASSNAMES ) )
+			{
+				nProjectiles++;
+			}
+			for ( CBaseEntity *pEnt = gEntList.FindEntityByClassname( NULL, "kart_hazard_*" ); pEnt; pEnt = gEntList.FindEntityByClassname( pEnt, "kart_hazard_*" ) )
+			{
+				nHazards++;
+			}
+			if ( nProjectiles != m_nLastProjectiles || nHazards != m_nLastHazards )
+			{
+				m_nLastProjectiles = nProjectiles;
+				m_nLastHazards = nHazards;
+				Msg( "kart items: %d projectiles, %d hazards live\n", nProjectiles, nHazards );
+			}
+		}
+
+		if ( gpGlobals->curtime < m_flNextDebugDraw )
 			return;
 
 		m_flNextDebugDraw = gpGlobals->curtime + KART_DEBUG_DRAW_INTERVAL;
@@ -1325,6 +1352,8 @@ private:
 	}
 
 	float m_flNextDebugDraw;
+	float m_flNextCountPrint;
+	int m_nLastProjectiles, m_nLastHazards;
 };
 
 static CKartRaceSystem g_KartRaceSystem;

@@ -7,6 +7,7 @@
 #include "cbase.h"
 #include "vcollide_parse.h"
 #include "c_hl2mp_player.h"
+#include "kart_items.h"
 #include "view.h"
 #include "takedamageinfo.h"
 #include "hl2mp_gamerules.h"
@@ -553,6 +554,26 @@ void C_HL2MP_Player::DrawKartDebugOverlay( void )
 	DebugRow( "boost left", "%.2f", MAX( 0.0f, m_flKartBoostEndTime - gpGlobals->curtime ) );
 	DebugRow( "boost scale", "%.2f", IsKartBoosting() ? m_flKartBoostScale : 1.0f );
 	DebugRow( "hop airtime", "%.2f", m_flKartHopTime );
+
+	// Items
+	if ( KartItem_IsValid( m_nKartItem ) && m_nKartItem != KART_ITEM_NONE )
+	{
+		DebugRow( "item", "%s x%d%s", KartItem_GetName( m_nKartItem ), m_nKartItemCount,
+			m_nKartItem == KART_ITEM_BUFFER ? " (buffer held)" : "" );
+	}
+	else
+	{
+		DebugRow( "item", "none" );
+	}
+	if ( IsKartRouletteSpinning() )
+	{
+		DebugRow( "roulette", "%s, %.2fs left", KartItem_GetName( m_nKartRouletteItem ), m_flKartRouletteEnd - gpGlobals->curtime );
+	}
+	else
+	{
+		DebugRow( "roulette", "stopped (%s)", KartItem_GetName( m_nKartRouletteItem ) );
+	}
+	DebugRow( "live items", "see kart_debug_server" );
 
 	// Race state
 	CHL2MPRules *pRules = HL2MPRules();
