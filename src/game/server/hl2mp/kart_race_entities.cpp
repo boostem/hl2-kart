@@ -8,6 +8,7 @@
 #include "kart_race_entities.h"
 #include "hl2mp_player.h"
 #include "kart_shareddefs.h"
+#include "hl2mp_gamerules.h"
 #include "igamesystem.h"
 #include "GameEventListener.h"
 #include "recipientfilter.h"
@@ -232,6 +233,11 @@ void CKartRaceManager::Spawn( void )
 	{
 		Warning( "[kart] kart_race_manager laps %d is more than %d, using %d.\n", m_iLaps, KART_MAX_LAPS, KART_MAX_LAPS );
 		m_iLaps = KART_MAX_LAPS;
+	}
+
+	if ( HL2MPRules() )
+	{
+		HL2MPRules()->SetKartLaps( m_iLaps );
 	}
 }
 
@@ -576,6 +582,11 @@ void CKartRaceManager::UpdatePositions( void )
 	for ( int i = 0; i < racers.Count(); i++ )
 	{
 		racers[i]->m_nKartRacePosition = i + 1;
+	}
+
+	if ( HL2MPRules() )
+	{
+		HL2MPRules()->SetKartRacers( racers.Count() );
 	}
 }
 

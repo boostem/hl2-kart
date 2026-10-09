@@ -29,6 +29,9 @@ extern ConVar kart_hud;
 // stay hidden while it is.
 bool KartHud_LocalPlayerInKart( void );
 
+// English ordinal suffix of n: "st", "nd", "rd" or "th" (1st, 12th, 23rd).
+const wchar_t *KartHud_OrdinalSuffix( int n );
+
 class CKartHudElement : public CHudElement, public vgui::Panel
 {
 	DECLARE_CLASS_SIMPLE( CKartHudElement, vgui::Panel );
