@@ -192,6 +192,11 @@ public:
 	bool HasRoute( void ) const { return m_Route.Count() >= 2; }
 	int GetRouteCount( void ) const { return m_Route.Count(); }
 	const Vector &GetRouteCenter( int i ) const { return m_Route[i].center; }
+	// Unit direction and trigger of the segment starting at route position i.
+	const Vector &GetRouteDir( int i ) const { return m_Route[i].dir; }
+	CKartCheckpoint *GetRouteTrigger( int i ) const { return m_Route[i].hTrigger.Get(); }
+	// Route position of checkpoint 'index', or -1 when it isn't on the route.
+	int GetRoutePosition( int index ) const { return RoutePosition( index ); }
 
 	// Rebuilds the racing line from the kart_path_node chain, starting at the
 	// node nearest the start/finish line.

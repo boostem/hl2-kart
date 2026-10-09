@@ -12,6 +12,7 @@
 #include "hl2mp_player.h"
 #include "kart_hazards.h"
 #include "kart_proj_hubcap.h"
+#include "kart_proj_seeker.h"
 #include "tier1/fmtstr.h"
 #endif
 
@@ -19,9 +20,10 @@
 #include "tier0/memdbgon.h"
 
 #ifdef GAME_DLL
-static bool KartItemUse_Stub( CHL2MP_Player *pPlayer, bool bBackward );
 static bool KartItemUse_Nitro( CHL2MP_Player *pPlayer, bool bBackward );
 static bool KartItemUse_Hubcap( CHL2MP_Player *pPlayer, bool bBackward );
+static bool KartItemUse_Seeker( CHL2MP_Player *pPlayer, bool bBackward );
+static bool KartItemUse_Buffer( CHL2MP_Player *pPlayer, bool bBackward );
 #define KART_ITEM_USE( fn )	, fn
 #else
 #define KART_ITEM_USE( fn )
@@ -31,8 +33,8 @@ static bool KartItemUse_Hubcap( CHL2MP_Player *pPlayer, bool bBackward );
 //	>> Item table
 // ##################################################################################
 // Weights by bucket: the leader gets defensive and weak items, the back of the
-// pack the strong ones. Each item's own ticket replaces the stub use and tunes
-// its row; the balance pass (#46) tunes the weights with kart_item_dump.
+// pack the strong ones. The balance pass (#46) tunes the weights with
+// kart_item_dump.
 const KartItemInfo_t g_KartItems[KART_ITEM_COUNT] =
 {
 	//	name			display name	backward	weight: leader front middle back	count: leader front middle back
@@ -40,8 +42,8 @@ const KartItemInfo_t g_KartItems[KART_ITEM_COUNT] =
 	{ "hubcap",			"Hubcap",		true,		{ 30, 35, 35, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Hubcap ) },
 	{ "oil_slick",		"Oil Slick",	true,		{ 45, 25, 10,  5 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Oil ) },
 	{ "nitro_can",		"Nitro Can",	false,		{  0, 15, 25, 35 },					{ 1, 1, 2, 3 }	KART_ITEM_USE( KartItemUse_Nitro ) },
-	{ "seeker",			"Seeker",		false,		{  0, 15, 20, 30 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
-	{ "buffer",			"Buffer",		false,		{ 25, 10, 10, 20 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Stub ) },
+	{ "seeker",			"Seeker",		false,		{  0, 10, 25, 40 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Seeker ) },
+	{ "buffer",			"Buffer",		false,		{ 25, 15,  5, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Buffer ) },
 };
 
 COMPILE_TIME_ASSERT( KART_ITEM_COUNT <= ( 1 << KART_NET_ITEM_BITS ) );
@@ -170,19 +172,12 @@ bool KartItem_ReadUseInput( int nButtons, int nButtonsPressed, bool &bBackward )
 
 #ifdef GAME_DLL
 // ##################################################################################
-//	>> Server: box hooks, use stubs and commands
+//	>> Server: box hooks, item uses and commands
 // ##################################################################################
 extern ConVar kart_debug_server;
 
 ConVar kart_items_enabled( "kart_items_enabled", "1", FCVAR_NOTIFY, "Item boxes give karts items, and karts can use them." );
 ConVar kart_item_roulette_time( "kart_item_roulette_time", "1.5", 0, "Seconds the item roulette spins after a box is taken before the item can be used.", true, 0.0f, true, 10.0f );
-
-// Until each item's ticket lands: log the use, and the item is spent.
-static bool KartItemUse_Stub( CHL2MP_Player *pPlayer, bool bBackward )
-{
-	Msg( "[kart] %s used %s%s (stub, not implemented yet)\n", pPlayer->GetPlayerName(), KartItem_GetName( pPlayer->GetKartItem() ), bBackward ? " backward" : "" );
-	return true;
-}
 
 ConVar kart_nitro_duration( "kart_nitro_duration", "1.2", FCVAR_NOTIFY, "Seconds of boost per Nitro Can charge.", true, 0.0f, true, 10.0f );
 ConVar kart_nitro_scale( "kart_nitro_scale", "1.5", FCVAR_NOTIFY, "Speed scale of the Nitro Can boost.", true, 1.0f, true, 5.0f );
@@ -203,6 +198,21 @@ static bool KartItemUse_Nitro( CHL2MP_Player *pPlayer, bool bBackward )
 static bool KartItemUse_Hubcap( CHL2MP_Player *pPlayer, bool bBackward )
 {
 	return CKartProjHubcap::Throw( pPlayer, bBackward );
+}
+
+// Seeker: chases the kart ahead along the track, see kart_proj_seeker.
+static bool KartItemUse_Seeker( CHL2MP_Player *pPlayer, bool bBackward )
+{
+	return CKartProjSeeker::Launch( pPlayer );
+}
+
+ConVar kart_buffer_time( "kart_buffer_time", "8", FCVAR_NOTIFY, "Seconds a Buffer shield lasts if nothing hits it.", true, 0.1f, true, 60.0f );
+
+// Buffer: a shield that takes the next hit (CHL2MP_Player::KartApplyHit).
+static bool KartItemUse_Buffer( CHL2MP_Player *pPlayer, bool bBackward )
+{
+	pPlayer->KartRaiseBuffer( kart_buffer_time.GetFloat() );
+	return true;
 }
 
 bool KartPlayerHasItem( CHL2MP_Player *pPlayer )

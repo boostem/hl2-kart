@@ -22,6 +22,8 @@
 #include "datacache/imdlcache.h"
 #include "animation.h"
 #include "clienteffectprecachesystem.h"
+#include "materialsystem/imesh.h"
+#include "materialsystem/MaterialSystemUtil.h"
 
 // Don't alias here
 #if defined( CHL2MP_Player )
@@ -122,6 +124,7 @@ IMPLEMENT_CLIENTCLASS_DT(C_HL2MP_Player, DT_HL2MP_Player, CHL2MP_Player)
 	RecvPropFloat( RECVINFO( m_flKartBoostEndTime ) ),
 	RecvPropInt( RECVINFO( m_nKartHitState ) ),
 	RecvPropFloat( RECVINFO( m_flKartHitEndTime ) ),
+	RecvPropTime( RECVINFO( m_flKartBufferEndTime ) ),
 
 	RecvPropInt( RECVINFO( m_nKartLap ) ),
 	RecvPropInt( RECVINFO( m_nKartNextCheckpoint ) ),
@@ -226,6 +229,7 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_flKartBoostScale = 1.0f;
 	m_nKartHitState = KART_HIT_NONE;
 	m_flKartHitEndTime = 0.0f;
+	m_flKartBufferEndTime = 0.0f;
 	m_angKartRenderAngles.Init();
 
 	m_nKartLap = 0;
@@ -265,6 +269,7 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_iKartBoneSteerFL = -1;
 	m_nKartDriverModel = -1;
 	m_pKartDriver = NULL;
+	m_pKartBuffer = NULL;
 	m_flKartDriverLean = 0.0f;
 	m_flKartDriverLook = 0.0f;
 	m_iKartBoneSteerFR = -1;
@@ -285,6 +290,7 @@ C_HL2MP_Player::~C_HL2MP_Player( void )
 	ReleaseFlashlight();
 	StopKartSounds();
 	RemoveKartDriver();
+	RemoveKartBuffer();
 }
 
 int C_HL2MP_Player::GetIDTarget() const
@@ -494,6 +500,7 @@ void C_HL2MP_Player::ClientThink( void )
 	UpdateKartSounds();
 	UpdateKartSteering();
 	UpdateKartDriver();
+	UpdateKartBuffer();
 	UpdateKartSkidmarks();
 	UpdateKartBoostFX();
 
@@ -1109,6 +1116,159 @@ void C_HL2MP_Player::RemoveKartDriver( void )
 	{
 		m_pKartDriver->Release();
 		m_pKartDriver = NULL;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Buffer shield: a client-only translucent bubble around a kart while its
+// Buffer is up, drawn with a scrolling additive shield material. It blinks
+// for the last KART_BUFFER_BLINK_TIME seconds before it runs out.
+//-----------------------------------------------------------------------------
+#define KART_BUFFER_SIZE		1.45f	// shield radii, as a multiple of the kart hull's half size
+#define KART_BUFFER_RINGS		10		// rows of quads from pole to pole
+#define KART_BUFFER_SEGMENTS	20		// quads around
+#define KART_BUFFER_BLINK_TIME	1.5f
+#define KART_BUFFER_BLINK_RATE	8.0f	// blinks per second
+
+class C_KartBuffer : public C_BaseEntity
+{
+	DECLARE_CLASS( C_KartBuffer, C_BaseEntity );
+public:
+	explicit C_KartBuffer( C_HL2MP_Player *pKart ) : m_pKart( pKart ) {}
+
+	virtual bool ShouldDraw( void ) OVERRIDE;
+	virtual bool IsTransparent( void ) OVERRIDE { return true; }
+	virtual bool IsTwoPass( void ) OVERRIDE { return false; }
+	virtual void GetRenderBounds( Vector &mins, Vector &maxs ) OVERRIDE;
+	virtual int DrawModel( int flags ) OVERRIDE;
+
+	// Radii of the shield around its origin, the center of the kart hull.
+	static Vector GetRadii( void ) { return ( KART_HULL_MAX - KART_HULL_MIN ) * 0.5f * KART_BUFFER_SIZE; }
+
+private:
+	C_HL2MP_Player *m_pKart;	// owns this entity and removes it before it goes
+	CMaterialReference m_Material;
+};
+
+bool C_KartBuffer::ShouldDraw( void )
+{
+	if ( !m_pKart || !m_pKart->ShouldDraw() || !m_pKart->HasKartBuffer() )
+		return false;
+
+	// Hidden with the kart when the chase camera is pulled inside it.
+	if ( m_pKart->IsKartCamTooClose() && m_pKart->IsLocalPlayer() )
+		return false;
+
+	float flLeft = m_pKart->GetKartBufferEndTime() - gpGlobals->curtime;
+	if ( flLeft < KART_BUFFER_BLINK_TIME )
+		return fmodf( flLeft * KART_BUFFER_BLINK_RATE, 1.0f ) >= 0.5f;
+
+	return true;
+}
+
+void C_KartBuffer::GetRenderBounds( Vector &mins, Vector &maxs )
+{
+	maxs = GetRadii();
+	mins = -maxs;
+}
+
+int C_KartBuffer::DrawModel( int flags )
+{
+	if ( !m_Material.IsValid() )
+	{
+		m_Material.Init( KART_BUFFER_MATERIAL, TEXTURE_GROUP_CLIENT_EFFECTS );
+	}
+
+	const Vector vecRadii = GetRadii();
+	const Vector &vecCenter = GetAbsOrigin();
+	Vector vecForward, vecRight, vecUp;
+	AngleVectors( GetAbsAngles(), &vecForward, &vecRight, &vecUp );
+
+	CMatRenderContextPtr pRenderContext( materials );
+	pRenderContext->Bind( m_Material );
+	IMesh *pMesh = pRenderContext->GetDynamicMesh();
+
+	// Every quad both ways round: the far side shows through the near one,
+	// and additive blending doesn't care about the order.
+	CMeshBuilder meshBuilder;
+	meshBuilder.Begin( pMesh, MATERIAL_QUADS, KART_BUFFER_RINGS * KART_BUFFER_SEGMENTS * 2 );
+
+	for ( int iRing = 0; iRing < KART_BUFFER_RINGS; iRing++ )
+	{
+		for ( int iSeg = 0; iSeg < KART_BUFFER_SEGMENTS; iSeg++ )
+		{
+			static const int s_Corners[2][4][2] =
+			{
+				{ { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } },
+				{ { 0, 0 }, { 0, 1 }, { 1, 1 }, { 1, 0 } },
+			};
+
+			for ( int iSide = 0; iSide < 2; iSide++ )
+			{
+				for ( int i = 0; i < 4; i++ )
+				{
+					int r = iRing + s_Corners[iSide][i][0];
+					int seg = iSeg + s_Corners[iSide][i][1];
+					float flPhi = M_PI_F * r / KART_BUFFER_RINGS;
+					float flTheta = 2.0f * M_PI_F * seg / KART_BUFFER_SEGMENTS;
+
+					Vector vecDir( sinf( flPhi ) * cosf( flTheta ), sinf( flPhi ) * sinf( flTheta ), cosf( flPhi ) );
+					Vector vecNormal = vecForward * vecDir.x + vecRight * vecDir.y + vecUp * vecDir.z;
+					Vector vecPos = vecCenter + vecForward * ( vecDir.x * vecRadii.x ) + vecRight * ( vecDir.y * vecRadii.y ) + vecUp * ( vecDir.z * vecRadii.z );
+
+					meshBuilder.Position3fv( vecPos.Base() );
+					meshBuilder.Color4ub( 255, 255, 255, 255 );
+					meshBuilder.TexCoord2f( 0, 2.0f * seg / KART_BUFFER_SEGMENTS, (float)r / KART_BUFFER_RINGS );
+					meshBuilder.Normal3fv( vecNormal.Base() );
+					meshBuilder.AdvanceVertex();
+				}
+			}
+		}
+	}
+
+	meshBuilder.End();
+	pMesh->Draw();
+	return 1;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Creates the shield while the kart's Buffer is up, keeps it around
+//			the kart and removes it once the Buffer is gone.
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::UpdateKartBuffer( void )
+{
+	if ( !HasKartBuffer() || !IsInKart() || !IsAlive() || IsDormant() )
+	{
+		RemoveKartBuffer();
+		return;
+	}
+
+	if ( !m_pKartBuffer )
+	{
+		C_KartBuffer *pBuffer = new C_KartBuffer( this );
+		if ( !pBuffer->InitializeAsClientEntity( NULL, RENDER_GROUP_TRANSLUCENT_ENTITY ) )
+		{
+			pBuffer->Release();
+			return;
+		}
+
+		m_pKartBuffer = pBuffer;
+	}
+
+	QAngle angles( 0.0f, GetRenderAngles()[YAW], 0.0f );
+	Vector vecCenter;
+	VectorRotate( ( KART_HULL_MIN + KART_HULL_MAX ) * 0.5f, angles, vecCenter );
+	m_pKartBuffer->SetAbsOrigin( GetRenderOrigin() + vecCenter );
+	m_pKartBuffer->SetAbsAngles( angles );
+	m_pKartBuffer->UpdateVisibility();
+}
+
+void C_HL2MP_Player::RemoveKartBuffer( void )
+{
+	if ( m_pKartBuffer )
+	{
+		m_pKartBuffer->Release();
+		m_pKartBuffer = NULL;
 	}
 }
 
@@ -1950,6 +2110,7 @@ void C_HL2MP_Player::NotifyShouldTransmit( ShouldTransmitState_t state )
 
 		StopKartSounds();
 		RemoveKartDriver();
+		RemoveKartBuffer();
 	}
 
 	BaseClass::NotifyShouldTransmit( state );

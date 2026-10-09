@@ -132,8 +132,16 @@ public:
 	bool IsKartHitImmune( void ) const;
 	float GetKartHitSpinYaw( void ) const;
 	// Spins out or stuns the kart (pAttacker: who threw the item, may be NULL).
-	// False when it can't be hit: immune, not a live kart, or frozen.
+	// False when it can't be hit: immune, not a live kart, frozen, or its
+	// buffer took the hit.
 	bool KartApplyHit( KartHitType type, CBaseEntity *pAttacker );
+
+	// Buffer item: a shield that takes the next hit, until it does or the
+	// time it was raised for runs out. Server-side, networked to everyone.
+	bool HasKartBuffer( void ) const { return gpGlobals->curtime < m_flKartBufferEndTime; }
+	float GetKartBufferEndTime( void ) const { return m_flKartBufferEndTime; }
+	void KartRaiseBuffer( float flDuration );
+	void KartClearBuffer( void ) { m_flKartBufferEndTime = 0.0f; }
 	// kart_max_speed multiplier of this kart's top speed: 1 for people, set
 	// each tick by the kart bot (difficulty and rubber-banding). Not
 	// networked: bots aren't predicted.
@@ -258,6 +266,7 @@ private:
 	CNetworkVar( float, m_flKartBoostScale );	// kart_max_speed multiplier of the current boost
 	CNetworkVar( int, m_nKartHitState );		// KartHitType being played out, KART_HIT_NONE when none
 	CNetworkVar( float, m_flKartHitEndTime );	// time the hit ends (and kart_hit_immunity starts counting)
+	CNetworkVar( float, m_flKartBufferEndTime );	// time the buffer runs out, in the past when there is none
 	float m_flKartTopSpeedScale;				// kart_max_speed multiplier of the top speed, see GetKartTopSpeedScale
 
 	// Kart race state. Only the race manager and the race flow change it.
