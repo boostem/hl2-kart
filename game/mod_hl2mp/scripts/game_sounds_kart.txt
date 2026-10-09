@@ -181,6 +181,25 @@
 	"wave"			"buttons/button14.wav"
 }
 
+// Race start countdown (CKartBanner): a beep on 3, 2 and 1, then the GO tone once
+"Kart.CountdownBeep"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"buttons/button17.wav"
+}
+
+"Kart.CountdownGo"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"plats/elevbell1.wav"
+}
+
 // Nitro Can use
 "Kart.Nitro"
 {
