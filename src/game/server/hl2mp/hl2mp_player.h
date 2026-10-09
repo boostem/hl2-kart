@@ -111,6 +111,10 @@ public:
 	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
 	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
 	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
+	// Stops the kart and clears its drift and hop, heading flYaw.
+	void ResetKartMovement( float flYaw );
+	// Moves the kart to vecOrigin, stopped and heading flYaw (kart bots unsticking).
+	void KartTeleport( const Vector &vecOrigin, float flYaw );
 
 	// Kart race state (see kart_race_shared.h). The race manager drives it.
 	int GetKartLap( void ) const { return m_nKartLap; }

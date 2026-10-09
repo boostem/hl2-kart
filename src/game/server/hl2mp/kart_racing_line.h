@@ -94,12 +94,20 @@ public:
 	// The point on the line nearest vecPos. False when the line is empty.
 	bool GetNearestPoint( const Vector &vecPos, KartRacingLinePoint_t &point ) const;
 
+	// The point on the line nearest vecPos, looking only within flWindow of
+	// flDistance either way along the line, so a kart stays on its own stretch
+	// where the track passes close to itself. False when the line is empty.
+	bool GetNearestPointNear( const Vector &vecPos, float flDistance, float flWindow, KartRacingLinePoint_t &point ) const;
+
 	// Number of nodes on the map, whether or not they made it onto the line.
 	static int CountMapNodes( void );
 
 private:
 	// Lerps between samples i and i + 1 (wrapping) at fraction t.
 	void LerpSamples( int i, float t, KartRacingLinePoint_t &point ) const;
+
+	// The point on segments iFirst .. iFirst + nCount - 1 (wrapping) nearest vecPos.
+	void NearestOnSegments( const Vector &vecPos, int iFirst, int nCount, KartRacingLinePoint_t &point ) const;
 
 	CUtlVector< CHandle< CKartPathNode > > m_Nodes;
 	CUtlVector< float > m_NodeDistances;
