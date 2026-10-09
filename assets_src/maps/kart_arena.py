@@ -212,6 +212,14 @@ def build():
         m.trigger("kart_boost_pad", px, -2320, px + 256, -2000, height=64, boost_duration="1.0", boost_scale="1.4",
                   cooldown="1.0")
 
+    # Item boxes: two rows of 5 across a lane, 160 apart and 48 above the floor. One row sits in the east lane just
+    # after the first (banked) corner, the other on the north back straight between the jump's landing and the
+    # west corner.
+    for i in range(5):
+        off = (i - 2) * 160
+        m.entity("kart_item_box", (LANE_MID + off, 400, 48), respawn_time="3")
+        m.entity("kart_item_box", (-300, LANE_MID + off, 48), respawn_time="3")
+
     # Drift practice hairpin in the west lane (driven south): two staggered concrete barriers, each reaching 800
     # across the 1216-wide lane from one side, so the line weaves left, back right and out again.
     barrier_brush = {"top": WALL, "bottom": NODRAW, "side": WALL}
