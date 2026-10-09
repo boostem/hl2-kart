@@ -166,6 +166,8 @@ private:
 	CNetworkVar( bool, m_bKartMode );
 	CNetworkVar( float, m_flKartSpeed );	// forward speed along the kart's yaw, u/s
 	CNetworkVar( float, m_flKartYaw );		// heading of the kart body, degrees
+	CNetworkVar( float, m_flKartReverseTime );	// seconds the brake has been held at a standstill
+	CNetworkVar( float, m_flKartBumpCooldown );	// seconds until the next bump sound may play
 
 	float m_flNextModelChangeTime;
 	float m_flNextTeamChangeTime;

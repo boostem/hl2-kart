@@ -181,6 +181,8 @@ private:
 	bool	m_bKartMode;
 	float	m_flKartSpeed;		// forward speed along the kart's yaw, u/s
 	float	m_flKartYaw;		// heading of the kart body, degrees
+	float	m_flKartReverseTime;	// seconds the brake has been held at a standstill
+	float	m_flKartBumpCooldown;	// seconds until the next bump sound may play
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
 
 	CSoundPatch	*m_pKartEngineIdle;

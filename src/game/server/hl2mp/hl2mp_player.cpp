@@ -59,6 +59,8 @@ BEGIN_SEND_TABLE_NOBASE( CHL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 	// full-precision kart state for the local player's prediction
 	SendPropFloat( SENDINFO( m_flKartSpeed ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
 	SendPropFloat( SENDINFO( m_flKartYaw ), -1, SPROP_NOSCALE|SPROP_CHANGES_OFTEN ),
+	SendPropFloat( SENDINFO( m_flKartReverseTime ), -1, SPROP_NOSCALE ),
+	SendPropFloat( SENDINFO( m_flKartBumpCooldown ), -1, SPROP_NOSCALE ),
 
 END_SEND_TABLE()
 
@@ -164,6 +166,8 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_bKartMode = false;
 	m_flKartSpeed = 0.0f;
 	m_flKartYaw = 0.0f;
+	m_flKartReverseTime = 0.0f;
+	m_flKartBumpCooldown = 0.0f;
 
     m_bEnterObserver = false;
 	m_bReady = false;
@@ -405,6 +409,8 @@ void CHL2MP_Player::Spawn(void)
 		// drawn for the local player too so third person shows the kart.
 		m_flKartSpeed = 0.0f;
 		m_flKartYaw = GetAbsAngles()[YAW];	// spawn point facing
+		m_flKartReverseTime = 0.0f;
+		m_flKartBumpCooldown = 0.0f;
 		m_Local.m_bForceLocalPlayerDraw = true;
 		m_takedamage = DAMAGE_NO;
 		m_Local.m_iHideHUD |= KART_HIDEHUD_BITS;
