@@ -124,6 +124,10 @@ public:
 	bool IsInKart( void ) const { return m_bKartMode; }
 	float GetKartSpeed( void ) const { return m_flKartSpeed; }
 	float GetKartYaw( void ) const { return m_flKartYaw; }
+	bool IsDrifting( void ) const { return m_nKartDriftDir != 0; }
+	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
+	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
+	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
 
 	// In kart mode: locks the view to the kart heading and strips non-kart input.
 	virtual bool CreateMove( float flInputSampleTime, CUserCmd *pCmd ) OVERRIDE;
@@ -183,6 +187,10 @@ private:
 	float	m_flKartYaw;		// heading of the kart body, degrees
 	float	m_flKartReverseTime;	// seconds the brake has been held at a standstill
 	float	m_flKartBumpCooldown;	// seconds until the next bump sound may play
+	int		m_nKartDriftDir;	// drift direction, the steer sign at entry (+1 right, -1 left), 0 when not drifting
+	float	m_flKartSlipAngle;	// heading minus velocity yaw, degrees
+	float	m_flKartDriftTime;	// seconds into the current drift
+	float	m_flKartHopTime;	// seconds airborne since a hop, 0 when not hopping
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
 
 	CSoundPatch	*m_pKartEngineIdle;

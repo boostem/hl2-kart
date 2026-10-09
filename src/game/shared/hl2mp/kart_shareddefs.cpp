@@ -40,6 +40,14 @@ ConVar kart_bump_threshold( "kart_bump_threshold", "100", KART_TUNING_FLAGS, "Sp
 ConVar kart_bump_restitution( "kart_bump_restitution", "0.5", KART_TUNING_FLAGS, "Fraction of the speed left along the heading that the kart keeps after a bump." );
 ConVar kart_bump_cooldown( "kart_bump_cooldown", "0.3", KART_TUNING_FLAGS, "Minimum seconds between two kart bump sounds." );
 
+// Hop and drift
+ConVar kart_hop_velocity( "kart_hop_velocity", "160", KART_TUNING_FLAGS, "Upward speed of the kart's hop (jump tapped on the ground), in units per second." );
+ConVar kart_drift_min_speed( "kart_drift_min_speed", "250", KART_TUNING_FLAGS, "Below this forward speed (units per second) the kart cannot drift, and a drift ends." );
+ConVar kart_drift_slip_angle( "kart_drift_slip_angle", "25", KART_TUNING_FLAGS, "Degrees the kart's nose points into the turn past its direction of travel while drifting." );
+ConVar kart_drift_turn_min( "kart_drift_turn_min", "40", KART_TUNING_FLAGS, "Drift turn rate while steering against the drift (widest line), in degrees per second." );
+ConVar kart_drift_turn_max( "kart_drift_turn_max", "160", KART_TUNING_FLAGS, "Drift turn rate while steering into the drift (tightest line), in degrees per second." );
+ConVar kart_drift_slip_rate( "kart_drift_slip_rate", "90", KART_TUNING_FLAGS, "How fast the slip angle builds up in a drift and straightens out after it, in degrees per second." );
+
 const color32 g_KartColors[KART_COLOR_COUNT] =
 {
 	{ 230,  60,  60, 255 },	// red

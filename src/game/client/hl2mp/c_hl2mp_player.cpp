@@ -55,6 +55,9 @@ BEGIN_RECV_TABLE_NOBASE( C_HL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 	RecvPropFloat( RECVINFO( m_flKartYaw ) ),
 	RecvPropFloat( RECVINFO( m_flKartReverseTime ) ),
 	RecvPropFloat( RECVINFO( m_flKartBumpCooldown ) ),
+	RecvPropFloat( RECVINFO( m_flKartSlipAngle ) ),
+	RecvPropFloat( RECVINFO( m_flKartDriftTime ) ),
+	RecvPropFloat( RECVINFO( m_flKartHopTime ) ),
 END_RECV_TABLE()
 
 // all players except the local player
@@ -77,6 +80,7 @@ IMPLEMENT_CLIENTCLASS_DT(C_HL2MP_Player, DT_HL2MP_Player, CHL2MP_Player)
 	RecvPropInt( RECVINFO( m_iSpawnInterpCounter ) ),
 	RecvPropInt( RECVINFO( m_iPlayerSoundType) ),
 	RecvPropBool( RECVINFO( m_bKartMode ) ),
+	RecvPropInt( RECVINFO( m_nKartDriftDir ) ),
 
 	RecvPropBool( RECVINFO( m_fIsWalking ) ),
 END_RECV_TABLE()
@@ -89,6 +93,10 @@ BEGIN_PREDICTION_DATA( C_HL2MP_Player )
 	DEFINE_PRED_FIELD_TOL( m_flKartYaw, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.125f ),
 	DEFINE_PRED_FIELD_TOL( m_flKartReverseTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
 	DEFINE_PRED_FIELD_TOL( m_flKartBumpCooldown, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
+	DEFINE_PRED_FIELD( m_nKartDriftDir, FIELD_INTEGER, FTYPEDESC_INSENDTABLE ),
+	DEFINE_PRED_FIELD_TOL( m_flKartSlipAngle, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.125f ),
+	DEFINE_PRED_FIELD_TOL( m_flKartDriftTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
+	DEFINE_PRED_FIELD_TOL( m_flKartHopTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
 
 	// misyl: Ammo is server side entities in HL2MP. Not catastrophic to error about.
 	// Just let the server stomp all over us.
@@ -143,6 +151,10 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_flKartYaw = 0.0f;
 	m_flKartReverseTime = 0.0f;
 	m_flKartBumpCooldown = 0.0f;
+	m_nKartDriftDir = 0;
+	m_flKartSlipAngle = 0.0f;
+	m_flKartDriftTime = 0.0f;
+	m_flKartHopTime = 0.0f;
 	m_angKartRenderAngles.Init();
 
 	m_pKartEngineIdle = NULL;
