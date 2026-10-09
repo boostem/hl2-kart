@@ -143,6 +143,9 @@ public:
 	float GetKartBoostScale( void ) const { return m_flKartBoostScale; }
 	void KartGiveBoost( float flDuration, float flSpeedScale );
 
+	// Only kart bots (server side) drive at another top speed; the local kart never does.
+	float GetKartTopSpeedScale( void ) const { return 1.0f; }
+
 	// Kart race state (see kart_race_shared.h), networked for every player.
 	int GetKartLap( void ) const { return m_nKartLap; }
 	int GetKartNextCheckpoint( void ) const { return m_nKartNextCheckpoint; }

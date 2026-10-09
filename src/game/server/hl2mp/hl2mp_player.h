@@ -122,6 +122,12 @@ public:
 	float GetKartBoostScale( void ) const { return m_flKartBoostScale; }
 	void KartGiveBoost( float flDuration, float flSpeedScale );
 
+	// kart_max_speed multiplier of this kart's top speed: 1 for people, set
+	// each tick by the kart bot (difficulty and rubber-banding). Not
+	// networked: bots aren't predicted.
+	float GetKartTopSpeedScale( void ) const { return m_flKartTopSpeedScale; }
+	void SetKartTopSpeedScale( float flScale ) { m_flKartTopSpeedScale = flScale; }
+
 	// Stops the kart and clears its drift, hop, drift charge and boost, heading flYaw.
 	void ResetKartMovement( float flYaw );
 	// Moves the kart to vecOrigin, stopped and heading flYaw (kart bots unsticking).
@@ -230,6 +236,7 @@ private:
 	CNetworkVar( int, m_nKartDriftTier );		// mini-turbo tier the charge has reached, 0-3
 	CNetworkVar( float, m_flKartBoostEndTime );	// time the current boost ends, in the past when not boosting
 	CNetworkVar( float, m_flKartBoostScale );	// kart_max_speed multiplier of the current boost
+	float m_flKartTopSpeedScale;				// kart_max_speed multiplier of the top speed, see GetKartTopSpeedScale
 
 	// Kart race state. Only the race manager and the race flow change it.
 	friend class CKartRaceManager;
