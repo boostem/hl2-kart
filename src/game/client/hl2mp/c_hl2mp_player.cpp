@@ -43,6 +43,8 @@ BEGIN_RECV_TABLE_NOBASE( C_HL2MP_Player, DT_HL2MPLocalPlayerExclusive )
 
 	RecvPropFloat( RECVINFO( m_flKartSpeed ) ),
 	RecvPropFloat( RECVINFO( m_flKartYaw ) ),
+	RecvPropFloat( RECVINFO( m_flKartReverseTime ) ),
+	RecvPropFloat( RECVINFO( m_flKartBumpCooldown ) ),
 END_RECV_TABLE()
 
 // all players except the local player
@@ -75,6 +77,8 @@ BEGIN_PREDICTION_DATA( C_HL2MP_Player )
 	DEFINE_PRED_FIELD( m_bKartMode, FIELD_BOOLEAN, FTYPEDESC_INSENDTABLE ),
 	DEFINE_PRED_FIELD_TOL( m_flKartSpeed, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.5f ),
 	DEFINE_PRED_FIELD_TOL( m_flKartYaw, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.125f ),
+	DEFINE_PRED_FIELD_TOL( m_flKartReverseTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
+	DEFINE_PRED_FIELD_TOL( m_flKartBumpCooldown, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
 
 	// misyl: Ammo is server side entities in HL2MP. Not catastrophic to error about.
 	// Just let the server stomp all over us.
@@ -127,6 +131,8 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_bKartMode = false;
 	m_flKartSpeed = 0.0f;
 	m_flKartYaw = 0.0f;
+	m_flKartReverseTime = 0.0f;
+	m_flKartBumpCooldown = 0.0f;
 	m_angKartRenderAngles.Init();
 
 	m_pKartEngineIdle = NULL;

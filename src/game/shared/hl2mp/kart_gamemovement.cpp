@@ -143,7 +143,8 @@ void CKartGameMovement::KartPlayerMove( void )
 //			Inputs: the sign of forwardmove (throttle) and sidemove (steer) from
 //			the usercmd. Never client-only convars: the server has to reproduce
 //			this exactly.
-//			State: m_flKartSpeed and m_flKartYaw on the player, both predicted.
+//			State: m_flKartSpeed, m_flKartYaw, m_flKartReverseTime and
+//			m_flKartBumpCooldown on the player, all predicted.
 //			Tuning: replicated convars, the same value on both sides.
 //			Time: gpGlobals->frametime, which is TICK_INTERVAL on both sides.
 //-----------------------------------------------------------------------------
@@ -153,8 +154,11 @@ void CKartGameMovement::KartMove( void )
 
 	CHL2MP_Player *pKart = GetKartPlayer();
 	const float flFrametime = gpGlobals->frametime;
+	const bool bOnGround = ( player->GetGroundEntity() != NULL );
 
-	// Inputs
+	pKart->m_flKartBumpCooldown = MAX( 0.0f, pKart->m_flKartBumpCooldown - flFrametime );
+
+	// Inputs. A frozen kart gets none and coasts to a stop.
 	float flThrottle = 0.0f;
 	float flSteer = 0.0f;
 	if ( !( player->GetFlags() & FL_FROZEN ) )
@@ -163,18 +167,13 @@ void CKartGameMovement::KartMove( void )
 		flSteer = KartInputSign( mv->m_flSideMove );
 	}
 
-	// Speed: constant top speed with W held, coast to a stop otherwise.
-	// (Feel curves, reverse and braking are the next ticket.)
-	float flSpeed = pKart->m_flKartSpeed;
-	float flTargetSpeed = ( flThrottle > 0.0f ) ? kart_max_speed.GetFloat() : 0.0f;
-	flSpeed = Approach( flTargetSpeed, flSpeed, kart_accel.GetFloat() * flFrametime );
+	float flSpeed = KartUpdateSpeed( pKart->m_flKartSpeed, flThrottle, flFrametime );
 
 	// Heading: positive yaw is left, so D (positive sidemove) decreases yaw.
-	// No turning from a standstill.
 	float flYaw = pKart->m_flKartYaw;
-	if ( flSteer != 0.0f && fabs( flSpeed ) >= kart_turn_min_speed.GetFloat() )
+	if ( flSteer != 0.0f )
 	{
-		flYaw = AngleNormalize( flYaw - flSteer * kart_turn_rate.GetFloat() * flFrametime );
+		flYaw = AngleNormalize( flYaw - flSteer * KartTurnRate( flSpeed, bOnGround ) * flFrametime );
 	}
 
 	Vector vecForward = KartForward( flYaw );
@@ -183,21 +182,28 @@ void CKartGameMovement::KartMove( void )
 	// that reads them (the view angles are never used for movement in a kart).
 	AngleVectors( QAngle( 0.0f, flYaw, 0.0f ), &m_vecForward, &m_vecRight, &m_vecUp );
 
-	if ( player->GetGroundEntity() != NULL )
+	Vector vecStart = mv->GetAbsOrigin();
+
+	// The speed along the heading the move would keep with nothing in the way:
+	// whatever the collisions take off it is what the bump check looks at.
+	float flExpected;
+
+	if ( bOnGround )
 	{
 		// On the ground the velocity is the heading times the speed, no momentum
 		// sideways: the kart goes where it points.
 		mv->m_vecVelocity.x = vecForward.x * flSpeed;
 		mv->m_vecVelocity.y = vecForward.y * flSpeed;
 		mv->m_vecVelocity.z = 0.0f;
+		flExpected = flSpeed;
 
 		Vector dest;
-		dest.x = mv->GetAbsOrigin().x + mv->m_vecVelocity.x * flFrametime;
-		dest.y = mv->GetAbsOrigin().y + mv->m_vecVelocity.y * flFrametime;
-		dest.z = mv->GetAbsOrigin().z;
+		dest.x = vecStart.x + mv->m_vecVelocity.x * flFrametime;
+		dest.y = vecStart.y + mv->m_vecVelocity.y * flFrametime;
+		dest.z = vecStart.z;
 
 		trace_t pm;
-		TracePlayerBBox( mv->GetAbsOrigin(), dest, PlayerSolidMask(), COLLISION_GROUP_PLAYER_MOVEMENT, pm );
+		TracePlayerBBox( vecStart, dest, PlayerSolidMask(), COLLISION_GROUP_PLAYER_MOVEMENT, pm );
 
 		if ( pm.fraction == 1 )
 		{
@@ -213,7 +219,13 @@ void CKartGameMovement::KartMove( void )
 	}
 	else
 	{
-		// In the air the kart keeps its horizontal momentum and falls.
+		// Air control: the momentum turns toward the heading, a little each tick,
+		// so the kart can line up a landing without steering like on the ground.
+		float flBlend = clamp( kart_air_control.GetFloat() * flFrametime, 0.0f, 1.0f );
+		mv->m_vecVelocity.x = Lerp( flBlend, mv->m_vecVelocity.x, vecForward.x * flSpeed );
+		mv->m_vecVelocity.y = Lerp( flBlend, mv->m_vecVelocity.y, vecForward.y * flSpeed );
+		flExpected = mv->m_vecVelocity.x * vecForward.x + mv->m_vecVelocity.y * vecForward.y;
+
 		StartGravity();
 		TryPlayerMove();
 		FinishGravity();
@@ -221,6 +233,13 @@ void CKartGameMovement::KartMove( void )
 
 	// Set final flags.
 	CategorizePosition();
+
+	// Driving off the ground keeps the climb of the slope it left, so a ramp
+	// gives a little air instead of the kart dropping off its lip.
+	if ( bOnGround && player->GetGroundEntity() == NULL )
+	{
+		mv->m_vecVelocity.z = KartLaunchSpeed( vecStart );
+	}
 
 	// Make sure velocity is valid.
 	CheckVelocity();
@@ -234,13 +253,123 @@ void CKartGameMovement::KartMove( void )
 	CheckFalling();
 
 	// Wall contact: the speed state follows what the collision left of the
-	// velocity along the heading, so running into a wall bleeds speed instead of
-	// the kart pretending it still moves. (Bump sound/restitution are the next
-	// ticket.)
+	// velocity along the heading, so a glancing hit bleeds speed. A hit that
+	// takes more than kart_bump_threshold off is a bump: the kart keeps only part
+	// of what is left and thuds.
 	float flAlong = mv->m_vecVelocity.x * vecForward.x + mv->m_vecVelocity.y * vecForward.y;
 
-	pKart->m_flKartSpeed = flAlong;
+	// On the ground flExpected is flSpeed, so this is flAlong. In the air the
+	// velocity lags the heading; only the collision's share comes off the speed.
+	flSpeed += flAlong - flExpected;
+
+	if ( fabs( flExpected ) - fabs( flAlong ) > kart_bump_threshold.GetFloat() )
+	{
+		flSpeed *= kart_bump_restitution.GetFloat();
+
+		if ( pKart->m_flKartBumpCooldown <= 0.0f )
+		{
+			pKart->m_flKartBumpCooldown = kart_bump_cooldown.GetFloat();
+
+			// Predicted: the client plays it the first time it predicts the bump,
+			// the server sends it to everyone else.
+			CPASAttenuationFilter filter( player );
+			filter.UsePredictionRules();
+			player->EmitSound( filter, player->entindex(), "Kart.Impact" );
+		}
+	}
+
+	pKart->m_flKartSpeed = flSpeed;
 	pKart->m_flKartYaw = flYaw;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The kart's speed after one tick of throttle (+1 W, -1 S, 0 none).
+//			Signed: negative is reversing. Also runs the reverse delay timer.
+//-----------------------------------------------------------------------------
+float CKartGameMovement::KartUpdateSpeed( float flSpeed, float flThrottle, float flFrametime )
+{
+	CHL2MP_Player *pKart = GetKartPlayer();
+
+	if ( flThrottle > 0.0f )
+	{
+		pKart->m_flKartReverseTime = 0.0f;
+
+		// Still rolling backwards: brake. Otherwise a punchy launch, then a slower
+		// climb to top speed (and a slow-down to it if above).
+		float flRate;
+		if ( flSpeed < 0.0f )
+			flRate = kart_brake_decel.GetFloat();
+		else if ( flSpeed < kart_accel_low_threshold.GetFloat() )
+			flRate = kart_accel_low.GetFloat();
+		else
+			flRate = kart_accel.GetFloat();
+
+		return Approach( kart_max_speed.GetFloat(), flSpeed, flRate * flFrametime );
+	}
+
+	if ( flThrottle < 0.0f )
+	{
+		if ( flSpeed > KART_STOPPED_SPEED )
+		{
+			// Rolling forward: brake.
+			pKart->m_flKartReverseTime = 0.0f;
+			return Approach( 0.0f, flSpeed, kart_brake_decel.GetFloat() * flFrametime );
+		}
+
+		if ( flSpeed >= -KART_STOPPED_SPEED && pKart->m_flKartReverseTime < kart_reverse_delay.GetFloat() )
+		{
+			// Stopped: hold still for kart_reverse_delay before backing up, so
+			// braking to a stop does not roll straight into reverse.
+			pKart->m_flKartReverseTime += flFrametime;
+			return Approach( 0.0f, flSpeed, kart_brake_decel.GetFloat() * flFrametime );
+		}
+
+		return Approach( -kart_reverse_speed.GetFloat(), flSpeed, kart_reverse_accel.GetFloat() * flFrametime );
+	}
+
+	pKart->m_flKartReverseTime = 0.0f;
+	return Approach( 0.0f, flSpeed, kart_coast_decel.GetFloat() * flFrametime );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Signed steering rate in degrees per second for a speed: tight at low
+//			speed, wide at top speed, none when (nearly) stopped, reduced in the
+//			air, and mirrored in reverse like a car.
+//-----------------------------------------------------------------------------
+float CKartGameMovement::KartTurnRate( float flSpeed, bool bOnGround )
+{
+	float flAbsSpeed = fabs( flSpeed );
+	if ( flAbsSpeed < kart_turn_min_speed.GetFloat() )
+		return 0.0f;
+
+	float flMaxSpeed = MAX( kart_max_speed.GetFloat(), 1.0f );
+	float flRate = RemapValClamped( flAbsSpeed / flMaxSpeed, 0.0f, 1.0f, kart_turn_rate_low.GetFloat(), kart_turn_rate_high.GetFloat() );
+
+	if ( !bOnGround )
+	{
+		flRate *= kart_air_turn_scale.GetFloat();
+	}
+
+	return ( flSpeed < 0.0f ) ? -flRate : flRate;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Upward speed for a kart that just drove off the ground at vecStart:
+//			its ground velocity projected onto the slope it was on. Zero on flat
+//			or downhill ground, and only walkable slopes count, so a step edge
+//			never throws the kart.
+//-----------------------------------------------------------------------------
+float CKartGameMovement::KartLaunchSpeed( const Vector &vecStart )
+{
+	trace_t pm;
+	TracePlayerBBox( vecStart, vecStart - Vector( 0.0f, 0.0f, 2.0f ), PlayerSolidMask(), COLLISION_GROUP_PLAYER_MOVEMENT, pm );
+
+	if ( pm.fraction == 1.0f || pm.startsolid || pm.plane.normal.z < 0.7f )
+		return 0.0f;
+
+	const Vector &n = pm.plane.normal;
+	float flClimb = -( n.x * mv->m_vecVelocity.x + n.y * mv->m_vecVelocity.y ) / n.z;
+	return MAX( flClimb, 0.0f );
 }
 
 //-----------------------------------------------------------------------------

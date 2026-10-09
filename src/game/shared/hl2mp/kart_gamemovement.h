@@ -6,7 +6,7 @@
 //
 //			The whole point is determinism: every input comes from the usercmd
 //			(forwardmove / sidemove signs) and every piece of state is a
-//			predicted player field (m_flKartSpeed, m_flKartYaw) or shared
+//			predicted player field (m_flKartSpeed, m_flKartYaw, ...) or shared
 //			replicated convar. The client never integrates the heading outside
 //			this code; it only feeds the predicted yaw back as the view angle so
 //			the mouse has no effect.
@@ -50,6 +50,15 @@ protected:
 
 	// One tick of kart physics: speed and heading from the usercmd, then the move.
 	void			KartMove( void );
+
+	// The speed after one tick of throttle, signed (negative is reversing).
+	float			KartUpdateSpeed( float flSpeed, float flThrottle, float flFrametime );
+
+	// Signed steering rate (degrees per second) for a speed.
+	static float	KartTurnRate( float flSpeed, bool bOnGround );
+
+	// Upward speed for a kart that just left the ground it stood on at vecStart.
+	float			KartLaunchSpeed( const Vector &vecStart );
 
 	// The kart's forward direction (unit, horizontal) for a heading.
 	static Vector	KartForward( float flYaw );

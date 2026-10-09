@@ -28,8 +28,25 @@ extern ConVar kart_enabled;
 // prediction matches the server; not cheats, so cfg/kart_tuning.cfg can set them.
 extern ConVar kart_max_speed;
 extern ConVar kart_accel;
-extern ConVar kart_turn_rate;
+extern ConVar kart_accel_low;
+extern ConVar kart_accel_low_threshold;
+extern ConVar kart_brake_decel;
+extern ConVar kart_reverse_speed;
+extern ConVar kart_reverse_accel;
+extern ConVar kart_reverse_delay;
+extern ConVar kart_coast_decel;
+extern ConVar kart_turn_rate_low;
+extern ConVar kart_turn_rate_high;
 extern ConVar kart_turn_min_speed;
+extern ConVar kart_air_turn_scale;
+extern ConVar kart_air_control;
+extern ConVar kart_bump_threshold;
+extern ConVar kart_bump_restitution;
+extern ConVar kart_bump_cooldown;
+
+// Below this speed (units per second, either way) the kart counts as stopped:
+// holding the brake there starts the reverse delay.
+#define KART_STOPPED_SPEED	1.0f
 
 // Kart collision hull and eye position. A kart does not crouch, so the duck
 // hull is the standing hull and the duck view is the standing view.
