@@ -6,6 +6,8 @@ Sources for assets before compilation.
 - `assets_src/kart_scrap/`: the scrap kart, the default kart model (see `docs/modeling-guide.md`). `kart_scrap.png` is
   its baked base texture.
 - `assets_src/props/`: the track dressing kit, all props built by `build_props.py` (see `docs/dressing-kit.md`).
+- `assets_src/items/`: the item models (item box, hubcap, nitro can, oil slick, seeker, buffer), all built by
+  `build_items.py` (see `docs/modeling-guide.md`).
 - `assets_src/<model_name>/build_<model_name>.py`: Blender script that builds the model; exported SMD/DMX and the QC file sit next to it.
 - `assets_src/maps/*.vmf`: map sources. `kart_arena.vmf` is written by `kart_arena.py` (see `docs/asset-pipeline.md`).
 - `assets_src/textures/`: texture originals.

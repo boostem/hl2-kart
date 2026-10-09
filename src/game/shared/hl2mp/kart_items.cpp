@@ -37,15 +37,18 @@ static bool KartItemUse_Buffer( CHL2MP_Player *pPlayer, bool bBackward );
 // Weights by bucket: the leader gets defensive and weak items, the back of the
 // pack the strong ones. The balance pass (#46) tunes the weights with
 // kart_item_dump.
+//
+// Models: original, built in Blender (assets_src/items/, see
+// docs/modeling-guide.md). The none row holds the item box's.
 const KartItemInfo_t g_KartItems[KART_ITEM_COUNT] =
 {
-	//	name			display name	backward	weight: leader front middle back	count: leader front middle back
-	{ "none",			"None",			false,		{  0,  0,  0,  0 },					{ 0, 0, 0, 0 }	KART_ITEM_USE( NULL ) },
-	{ "hubcap",			"Hubcap",		true,		{ 30, 35, 35, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Hubcap ) },
-	{ "oil_slick",		"Oil Slick",	true,		{ 45, 25, 10,  5 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Oil ) },
-	{ "nitro_can",		"Nitro Can",	false,		{  0, 15, 25, 35 },					{ 1, 1, 2, 3 }	KART_ITEM_USE( KartItemUse_Nitro ) },
-	{ "seeker",			"Seeker",		false,		{  0, 10, 25, 40 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Seeker ) },
-	{ "buffer",			"Buffer",		false,		{ 25, 15,  5, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Buffer ) },
+	//	name			display name	model										backward	weight: leader front middle back	count: leader front middle back
+	{ "none",			"None",			"models/kart/items/item_box.mdl",			false,		{  0,  0,  0,  0 },					{ 0, 0, 0, 0 }	KART_ITEM_USE( NULL ) },
+	{ "hubcap",			"Hubcap",		"models/kart/items/hubcap.mdl",				true,		{ 30, 35, 35, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Hubcap ) },
+	{ "oil_slick",		"Oil Slick",	"models/kart/items/oil_slick.mdl",			true,		{ 45, 25, 10,  5 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Oil ) },
+	{ "nitro_can",		"Nitro Can",	"models/kart/items/nitro_can.mdl",			false,		{  0, 15, 25, 35 },					{ 1, 1, 2, 3 }	KART_ITEM_USE( KartItemUse_Nitro ) },
+	{ "seeker",			"Seeker",		"models/kart/items/seeker.mdl",				false,		{  0, 10, 25, 40 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Seeker ) },
+	{ "buffer",			"Buffer",		"models/kart/items/buffer.mdl",				false,		{ 25, 15,  5, 10 },					{ 1, 1, 1, 1 }	KART_ITEM_USE( KartItemUse_Buffer ) },
 };
 
 COMPILE_TIME_ASSERT( KART_ITEM_COUNT <= ( 1 << KART_NET_ITEM_BITS ) );
@@ -77,6 +80,14 @@ const char *KartItem_GetDisplayName( int item )
 		return "?";
 
 	return g_KartItems[item].pszDisplayName;
+}
+
+const char *KartItem_GetModel( int item )
+{
+	if ( item < KART_ITEM_NONE || item >= KART_ITEM_COUNT )
+		return g_KartItems[KART_ITEM_NONE].pszModel;
+
+	return g_KartItems[item].pszModel;
 }
 
 int KartItem_FromName( const char *pszName )
@@ -184,6 +195,11 @@ ConVar kart_item_roulette_time( "kart_item_roulette_time", "1.5", 0, "Seconds th
 ConVar kart_nitro_duration( "kart_nitro_duration", "1.2", FCVAR_NOTIFY, "Seconds of boost per Nitro Can charge.", true, 0.0f, true, 10.0f );
 ConVar kart_nitro_scale( "kart_nitro_scale", "1.5", FCVAR_NOTIFY, "Speed scale of the Nitro Can boost.", true, 1.0f, true, 5.0f );
 
+#define KART_NITRO_CAN_BACK		48.0f	// the spent can starts this far behind the kart's origin
+#define KART_NITRO_CAN_HEIGHT	24.0f	// and this high
+#define KART_NITRO_CAN_TOSS		150.0f	// thrown back and up this fast, on top of half the kart's speed
+#define KART_NITRO_CAN_LIFE		2.0f	// seconds before it fades out
+
 // Nitro Can: an instant boost, one per charge. Not while stunned: a hit stops
 // any boost, so the charge is kept for when control comes back.
 static bool KartItemUse_Nitro( CHL2MP_Player *pPlayer, bool bBackward )
@@ -193,6 +209,20 @@ static bool KartItemUse_Nitro( CHL2MP_Player *pPlayer, bool bBackward )
 
 	pPlayer->KartGiveBoost( kart_nitro_duration.GetFloat(), kart_nitro_scale.GetFloat() );
 	pPlayer->EmitSound( "Kart.Nitro" );
+
+	// The spent can is tossed off the back: a client-side gib that tumbles,
+	// bounces off the world and fades out.
+	int nModel = modelinfo->GetModelIndex( KartItem_GetModel( KART_ITEM_NITRO_CAN ) );
+	if ( nModel > 0 )
+	{
+		QAngle angKart( 0.0f, pPlayer->GetKartYaw(), 0.0f );
+		Vector vecForward, vecRight;
+		AngleVectors( angKart, &vecForward, &vecRight, NULL );
+		Vector vecPos = pPlayer->GetAbsOrigin() - vecForward * KART_NITRO_CAN_BACK + Vector( 0, 0, KART_NITRO_CAN_HEIGHT );
+		Vector vecVel = pPlayer->GetAbsVelocity() * 0.5f - vecForward * KART_NITRO_CAN_TOSS + vecRight * RandomFloat( -60.0f, 60.0f ) + Vector( 0, 0, KART_NITRO_CAN_TOSS );
+		CPVSFilter filter( vecPos );
+		te->BreakModel( filter, 0.0f, vecPos, angKart, vec3_origin, vecVel, nModel, 40, 1, KART_NITRO_CAN_LIFE, BREAK_METAL );
+	}
 	return true;
 }
 

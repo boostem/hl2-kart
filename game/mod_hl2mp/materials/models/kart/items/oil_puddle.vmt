@@ -1,0 +1,13 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/kart/items/oil_puddle"
+	"$bumpmap" "models/kart/items/oil_puddle_normal"
+	"$surfaceprop" "default"
+	"$translucent" "1"
+	"$phong" "1"
+	"$phongexponent" "40"
+	"$phongboost" "4"
+	"$phongfresnelranges" "[.5 .8 1]"
+	"$envmap" "env_cubemap"
+	"$envmaptint" "[.18 .18 .18]"
+}

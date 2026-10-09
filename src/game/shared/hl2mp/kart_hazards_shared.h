@@ -12,11 +12,9 @@
 #pragma once
 #endif
 
-// Oil Slick. Original texture, agent-made: assets_src/textures/oil_slick.png,
-// converted with tools/img2vtf.py.
-#define KART_OIL_MATERIAL			"kart/oil_slick"
-
-#define KART_OIL_RADIUS				40.0f	// half the drawn quad's side and of the trigger's
+// Oil Slick. The model (assets_src/items/oil_slick/) is a puddle on a
+// 2 * KART_OIL_RADIUS square.
+#define KART_OIL_RADIUS				40.0f	// half the puddle's square and of the trigger's
 #define KART_OIL_TRIGGER_HEIGHT		16.0f	// trigger height above the ground; a hop clears it
 #define KART_OIL_GROW_TIME			0.25f	// the puddle spreads from nothing as it lands
 #define KART_OIL_FADE_TIME			0.75f	// it fades out over its last moments

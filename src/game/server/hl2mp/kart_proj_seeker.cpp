@@ -23,7 +23,6 @@ ConVar kart_seeker_turn_rate( "kart_seeker_turn_rate", "240", FCVAR_NOTIFY, "How
 ConVar kart_seeker_lock_range( "kart_seeker_lock_range", "700", FCVAR_NOTIFY, "Within this many units of its target, with a clear line to it, a Seeker leaves the track and steers straight at it.", true, 0.0f, true, 10000.0f );
 ConVar kart_seeker_lifetime( "kart_seeker_lifetime", "12", FCVAR_NOTIFY, "Seconds a Seeker chases before it breaks.", true, 0.1f, true, 60.0f );
 
-#define KART_SEEKER_SCALE			0.6f
 #define KART_SEEKER_RADIUS			8.0f
 #define KART_SEEKER_HALF_HEIGHT		6.0f
 #define KART_SEEKER_HOVER			6.0f	// gap kept under it while on the ground
@@ -101,7 +100,7 @@ CKartProjSeeker::CKartProjSeeker()
 
 void CKartProjSeeker::Precache( void )
 {
-	PrecacheModel( KART_SEEKER_MODEL );
+	PrecacheModel( KartItem_GetModel( KART_ITEM_SEEKER ) );
 	PrecacheScriptSound( KART_SEEKER_SOUND_LAUNCH );
 	PrecacheScriptSound( KART_SEEKER_SOUND_LOOP );
 	PrecacheScriptSound( KART_SEEKER_SOUND_LOCK );
@@ -112,8 +111,7 @@ void CKartProjSeeker::Precache( void )
 void CKartProjSeeker::Spawn( void )
 {
 	Precache();
-	SetModel( KART_SEEKER_MODEL );
-	SetModelScale( KART_SEEKER_SCALE );
+	SetModel( KartItem_GetModel( KART_ITEM_SEEKER ) );
 
 	// Moved by hand in the think: no engine movement or collisions.
 	SetMoveType( MOVETYPE_NONE );

@@ -47,7 +47,7 @@ END_DATADESC()
 CKartItemBox::CKartItemBox()
 {
 	m_flRespawnTime = 3.0f;
-	m_flScale = 0.6f;
+	m_flScale = 1.0f;
 	m_bTaken = false;
 	m_flMaterializeTime = 0.0f;
 	m_flBobPhase = 0.0f;
@@ -56,7 +56,7 @@ CKartItemBox::CKartItemBox()
 
 void CKartItemBox::Precache( void )
 {
-	PrecacheModel( KART_ITEM_BOX_MODEL );
+	PrecacheModel( KartItem_GetModel( KART_ITEM_NONE ) );
 	PrecacheModel( KART_ITEM_BOX_FLASH_SPRITE );
 	PrecacheScriptSound( "Kart.ItemPickup" );
 	PrecacheScriptSound( "Kart.ItemRespawn" );
@@ -65,7 +65,7 @@ void CKartItemBox::Precache( void )
 void CKartItemBox::Spawn( void )
 {
 	Precache();
-	SetModel( KART_ITEM_BOX_MODEL );
+	SetModel( KartItem_GetModel( KART_ITEM_NONE ) );
 
 	if ( m_flRespawnTime < 0.0f )
 	{
@@ -73,7 +73,7 @@ void CKartItemBox::Spawn( void )
 	}
 	if ( m_flScale <= 0.0f )
 	{
-		m_flScale = 0.6f;
+		m_flScale = 1.0f;
 	}
 
 	// Floats in place: noclip so the angular velocity (spin) and the bob

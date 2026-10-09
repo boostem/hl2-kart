@@ -38,10 +38,6 @@
 
 class CHL2MP_Player;
 
-// Placeholder model until the custom one (M8): the HL2 hopper mine, a neutral
-// round shape. Valve content, referenced by path only.
-#define KART_SEEKER_MODEL		"models/props_combine/combine_mine01.mdl"
-
 //-----------------------------------------------------------------------------
 // kart_proj_seeker
 //-----------------------------------------------------------------------------

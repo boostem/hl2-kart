@@ -23,8 +23,7 @@ ConVar kart_hubcap_bounces( "kart_hubcap_bounces", "3", FCVAR_NOTIFY, "Wall boun
 ConVar kart_hubcap_lifetime( "kart_hubcap_lifetime", "5", FCVAR_NOTIFY, "Seconds a Hubcap skims along before it breaks.", true, 0.1f, true, 60.0f );
 ConVar kart_hubcap_bounce_scale( "kart_hubcap_bounce_scale", "0.9", FCVAR_NOTIFY, "Speed a Hubcap keeps on each wall bounce.", true, 0.0f, true, 1.0f );
 
-#define KART_HUBCAP_SCALE			0.5f
-#define KART_HUBCAP_RADIUS			9.0f	// the scaled wheel lies flat: ~17.5 * 0.5 across, ~5.5 * 0.5 thick
+#define KART_HUBCAP_RADIUS			9.0f	// the model lies flat: 18 across, -0.8 .. 2.4 high
 #define KART_HUBCAP_HALF_HEIGHT		3.0f
 #define KART_HUBCAP_HOVER			1.0f	// gap kept under it while skimming
 #define KART_HUBCAP_STEP			12.0f	// climbs this much per move without it being a wall
@@ -85,7 +84,7 @@ CKartProjHubcap::CKartProjHubcap()
 
 void CKartProjHubcap::Precache( void )
 {
-	PrecacheModel( KART_HUBCAP_MODEL );
+	PrecacheModel( KartItem_GetModel( KART_ITEM_HUBCAP ) );
 	PrecacheScriptSound( KART_HUBCAP_SOUND_THROW );
 	PrecacheScriptSound( KART_HUBCAP_SOUND_BOUNCE );
 	PrecacheScriptSound( KART_HUBCAP_SOUND_BREAK );
@@ -94,8 +93,7 @@ void CKartProjHubcap::Precache( void )
 void CKartProjHubcap::Spawn( void )
 {
 	Precache();
-	SetModel( KART_HUBCAP_MODEL );
-	SetModelScale( KART_HUBCAP_SCALE );
+	SetModel( KartItem_GetModel( KART_ITEM_HUBCAP ) );
 
 	// Moved by hand in the think: no engine movement or collisions.
 	SetMoveType( MOVETYPE_NONE );
@@ -103,9 +101,8 @@ void CKartProjHubcap::Spawn( void )
 	AddSolidFlags( FSOLID_NOT_SOLID );
 	UTIL_SetSize( this, s_vecHubcapMins, s_vecHubcapMaxs );
 
-	// The wheel's axle is its Y axis: rolled 90 it lies flat, and the yaw
-	// spins it like a thrown disc.
-	SetAbsAngles( QAngle( 0.0f, RandomFloat( 0.0f, 360.0f ), 90.0f ) );
+	// The model lies flat: the yaw spins it like a thrown disc.
+	SetAbsAngles( QAngle( 0.0f, RandomFloat( 0.0f, 360.0f ), 0.0f ) );
 
 	m_bOnGround = true;
 	m_nBounces = 0;

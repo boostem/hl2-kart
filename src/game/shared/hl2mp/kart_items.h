@@ -71,6 +71,7 @@ struct KartItemInfo_t
 {
 	const char *pszName;		// console name, kart_give_item and kart_item_dump
 	const char *pszDisplayName;
+	const char *pszModel;		// what it looks like in the world (assets_src/items/); none: the item box
 	bool bBackward;				// can be thrown backwards
 	int nWeight[KART_ITEM_BUCKET_COUNT];	// relative chance in each bucket, 0 = never
 	int nCount[KART_ITEM_BUCKET_COUNT];		// uses given in each bucket, 1..KART_MAX_ITEM_COUNT
@@ -92,6 +93,10 @@ extern const KartItemInfo_t g_KartItems[KART_ITEM_COUNT];
 bool KartItem_IsValid( int item );
 const char *KartItem_GetName( int item );
 const char *KartItem_GetDisplayName( int item );
+
+// The item's model; the item box's for KART_ITEM_NONE. Every item model path
+// is in the item table, so precache it from there.
+const char *KartItem_GetModel( int item );
 
 // Item by console name (or number); KART_ITEM_COUNT when there is none.
 int KartItem_FromName( const char *pszName );

@@ -10,7 +10,8 @@
 //
 //			Server-authoritative. It flies an arc of its own (traces, no
 //			physics) until it lands, then lies flat on the ground as a trigger.
-//			The client draws it as a flat translucent quad (c_kart_hazards.cpp).
+//			Its model is a flat puddle (KartItem_GetModel( KART_ITEM_OIL_SLICK ));
+//			the client grows it as it lands and fades it out (c_kart_hazards.cpp).
 //
 //=============================================================================//
 
@@ -20,7 +21,7 @@
 #pragma once
 #endif
 
-#include "baseentity.h"
+#include "baseanimating.h"
 #include "kart_hazards_shared.h"
 
 class CHL2MP_Player;
@@ -28,9 +29,9 @@ class CHL2MP_Player;
 //-----------------------------------------------------------------------------
 // kart_hazard_oil
 //-----------------------------------------------------------------------------
-class CKartHazardOil : public CBaseEntity
+class CKartHazardOil : public CBaseAnimating
 {
-	DECLARE_CLASS( CKartHazardOil, CBaseEntity );
+	DECLARE_CLASS( CKartHazardOil, CBaseAnimating );
 	DECLARE_DATADESC();
 	DECLARE_SERVERCLASS();
 
@@ -42,7 +43,6 @@ public:
 
 	virtual void Spawn( void );
 	virtual void Precache( void );
-	virtual int UpdateTransmitState( void );
 
 	void FlyThink( void );
 	void LieThink( void );

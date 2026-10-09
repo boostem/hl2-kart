@@ -8,6 +8,7 @@
 #include "kart_hazards.h"
 #include "hl2mp_player.h"
 #include "kart_shareddefs.h"
+#include "kart_items.h"
 #include "tier1/fmtstr.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
@@ -79,7 +80,7 @@ CKartHazardOil *CKartHazardOil::Create( CHL2MP_Player *pDropper, const Vector &v
 
 void CKartHazardOil::Precache( void )
 {
-	PrecacheMaterial( KART_OIL_MATERIAL );
+	PrecacheModel( KartItem_GetModel( KART_ITEM_OIL_SLICK ) );
 	PrecacheScriptSound( "Kart.OilThrow" );
 	PrecacheScriptSound( "Kart.OilLand" );
 }
@@ -87,9 +88,10 @@ void CKartHazardOil::Precache( void )
 void CKartHazardOil::Spawn( void )
 {
 	Precache();
+	SetModel( KartItem_GetModel( KART_ITEM_OIL_SLICK ) );
+	AddEffects( EF_NOSHADOW );
 
-	// No model: the client draws the quad. A trigger once it has landed,
-	// sized for the PVS check from the start.
+	// A trigger once it has landed, sized for the PVS check from the start.
 	SetMoveType( MOVETYPE_NONE );
 	SetSolid( SOLID_BBOX );
 	AddSolidFlags( FSOLID_NOT_SOLID | FSOLID_TRIGGER );
@@ -102,12 +104,6 @@ void CKartHazardOil::Spawn( void )
 	SetTouch( NULL );
 	SetThink( &CKartHazardOil::FlyThink );
 	SetNextThink( gpGlobals->curtime );
-}
-
-int CKartHazardOil::UpdateTransmitState( void )
-{
-	// It has no model, which CBaseEntity would not send.
-	return SetTransmitState( FL_EDICT_PVSCHECK );
 }
 
 CHL2MP_Player *CKartHazardOil::GetDropper( void ) const

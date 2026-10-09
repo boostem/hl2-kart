@@ -12,6 +12,7 @@
 #include "takedamageinfo.h"
 #include "hl2mp_gamerules.h"
 #include "kart_shareddefs.h"
+#include "kart_items.h"
 #include "in_buttons.h"
 #include "input.h"
 #include "model_types.h"
@@ -23,8 +24,6 @@
 #include "datacache/imdlcache.h"
 #include "animation.h"
 #include "clienteffectprecachesystem.h"
-#include "materialsystem/imesh.h"
-#include "materialsystem/MaterialSystemUtil.h"
 
 // Don't alias here
 #if defined( CHL2MP_Player )
@@ -1141,34 +1140,24 @@ void C_HL2MP_Player::RemoveKartDriver( void )
 }
 
 //-----------------------------------------------------------------------------
-// Buffer shield: a client-only translucent bubble around a kart while its
-// Buffer is up, drawn with a scrolling additive shield material. It blinks
-// for the last KART_BUFFER_BLINK_TIME seconds before it runs out.
+// Buffer shield: a client-only model of a glowing ring around a kart while its
+// Buffer is up (KartItem_GetModel( KART_ITEM_BUFFER ), additive and scrolling).
+// It blinks for the last KART_BUFFER_BLINK_TIME seconds before it runs out.
 //-----------------------------------------------------------------------------
-#define KART_BUFFER_SIZE		1.45f	// shield radii, as a multiple of the kart hull's half size
-#define KART_BUFFER_RINGS		10		// rows of quads from pole to pole
-#define KART_BUFFER_SEGMENTS	20		// quads around
 #define KART_BUFFER_BLINK_TIME	1.5f
 #define KART_BUFFER_BLINK_RATE	8.0f	// blinks per second
 
-class C_KartBuffer : public C_BaseEntity
+class C_KartBuffer : public C_BaseAnimating
 {
-	DECLARE_CLASS( C_KartBuffer, C_BaseEntity );
+	DECLARE_CLASS( C_KartBuffer, C_BaseAnimating );
 public:
 	explicit C_KartBuffer( C_HL2MP_Player *pKart ) : m_pKart( pKart ) {}
 
 	virtual bool ShouldDraw( void ) OVERRIDE;
-	virtual bool IsTransparent( void ) OVERRIDE { return true; }
-	virtual bool IsTwoPass( void ) OVERRIDE { return false; }
-	virtual void GetRenderBounds( Vector &mins, Vector &maxs ) OVERRIDE;
-	virtual int DrawModel( int flags ) OVERRIDE;
-
-	// Radii of the shield around its origin, the center of the kart hull.
-	static Vector GetRadii( void ) { return ( KART_HULL_MAX - KART_HULL_MIN ) * 0.5f * KART_BUFFER_SIZE; }
+	virtual ShadowType_t ShadowCastType( void ) OVERRIDE { return SHADOWS_NONE; }
 
 private:
 	C_HL2MP_Player *m_pKart;	// owns this entity and removes it before it goes
-	CMaterialReference m_Material;
 };
 
 bool C_KartBuffer::ShouldDraw( void )
@@ -1187,71 +1176,6 @@ bool C_KartBuffer::ShouldDraw( void )
 	return true;
 }
 
-void C_KartBuffer::GetRenderBounds( Vector &mins, Vector &maxs )
-{
-	maxs = GetRadii();
-	mins = -maxs;
-}
-
-int C_KartBuffer::DrawModel( int flags )
-{
-	if ( !m_Material.IsValid() )
-	{
-		m_Material.Init( KART_BUFFER_MATERIAL, TEXTURE_GROUP_CLIENT_EFFECTS );
-	}
-
-	const Vector vecRadii = GetRadii();
-	const Vector &vecCenter = GetAbsOrigin();
-	Vector vecForward, vecRight, vecUp;
-	AngleVectors( GetAbsAngles(), &vecForward, &vecRight, &vecUp );
-
-	CMatRenderContextPtr pRenderContext( materials );
-	pRenderContext->Bind( m_Material );
-	IMesh *pMesh = pRenderContext->GetDynamicMesh();
-
-	// Every quad both ways round: the far side shows through the near one,
-	// and additive blending doesn't care about the order.
-	CMeshBuilder meshBuilder;
-	meshBuilder.Begin( pMesh, MATERIAL_QUADS, KART_BUFFER_RINGS * KART_BUFFER_SEGMENTS * 2 );
-
-	for ( int iRing = 0; iRing < KART_BUFFER_RINGS; iRing++ )
-	{
-		for ( int iSeg = 0; iSeg < KART_BUFFER_SEGMENTS; iSeg++ )
-		{
-			static const int s_Corners[2][4][2] =
-			{
-				{ { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } },
-				{ { 0, 0 }, { 0, 1 }, { 1, 1 }, { 1, 0 } },
-			};
-
-			for ( int iSide = 0; iSide < 2; iSide++ )
-			{
-				for ( int i = 0; i < 4; i++ )
-				{
-					int r = iRing + s_Corners[iSide][i][0];
-					int seg = iSeg + s_Corners[iSide][i][1];
-					float flPhi = M_PI_F * r / KART_BUFFER_RINGS;
-					float flTheta = 2.0f * M_PI_F * seg / KART_BUFFER_SEGMENTS;
-
-					Vector vecDir( sinf( flPhi ) * cosf( flTheta ), sinf( flPhi ) * sinf( flTheta ), cosf( flPhi ) );
-					Vector vecNormal = vecForward * vecDir.x + vecRight * vecDir.y + vecUp * vecDir.z;
-					Vector vecPos = vecCenter + vecForward * ( vecDir.x * vecRadii.x ) + vecRight * ( vecDir.y * vecRadii.y ) + vecUp * ( vecDir.z * vecRadii.z );
-
-					meshBuilder.Position3fv( vecPos.Base() );
-					meshBuilder.Color4ub( 255, 255, 255, 255 );
-					meshBuilder.TexCoord2f( 0, 2.0f * seg / KART_BUFFER_SEGMENTS, (float)r / KART_BUFFER_RINGS );
-					meshBuilder.Normal3fv( vecNormal.Base() );
-					meshBuilder.AdvanceVertex();
-				}
-			}
-		}
-	}
-
-	meshBuilder.End();
-	pMesh->Draw();
-	return 1;
-}
-
 //-----------------------------------------------------------------------------
 // Purpose: Creates the shield while the kart's Buffer is up, keeps it around
 //			the kart and removes it once the Buffer is gone.
@@ -1267,7 +1191,7 @@ void C_HL2MP_Player::UpdateKartBuffer( void )
 	if ( !m_pKartBuffer )
 	{
 		C_KartBuffer *pBuffer = new C_KartBuffer( this );
-		if ( !pBuffer->InitializeAsClientEntity( NULL, RENDER_GROUP_TRANSLUCENT_ENTITY ) )
+		if ( !pBuffer->InitializeAsClientEntity( KartItem_GetModel( KART_ITEM_BUFFER ), RENDER_GROUP_TRANSLUCENT_ENTITY ) )
 		{
 			pBuffer->Release();
 			return;

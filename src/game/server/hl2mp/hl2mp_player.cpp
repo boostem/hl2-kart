@@ -282,6 +282,8 @@ void CHL2MP_Player::Precache( void )
 	PrecacheModel( KART_DRIVER_ANIMS );
 	PrecacheModel( KART_PLACEHOLDER_MODEL );
 	UTIL_PrecacheOther( "kart_proj_hubcap" );
+	UTIL_PrecacheOther( "kart_proj_seeker" );
+	UTIL_PrecacheOther( "kart_hazard_oil" );
 	if ( kart_model.GetString()[0] )
 	{
 		PrecacheModel( kart_model.GetString() );
@@ -307,7 +309,13 @@ void CHL2MP_Player::Precache( void )
 	PrecacheScriptSound( KART_SOUND_HIT_SPINOUT );
 	PrecacheScriptSound( KART_SOUND_BUFFER_UP );
 	PrecacheScriptSound( KART_SOUND_BUFFER_POP );
-	PrecacheMaterial( KART_BUFFER_MATERIAL );
+
+	// Every item model (and the item box's), from the item table: the spent
+	// nitro can and the buffer ring have no entity of their own to do it.
+	for ( int item = KART_ITEM_NONE; item < KART_ITEM_COUNT; item++ )
+	{
+		PrecacheModel( KartItem_GetModel( item ) );
+	}
 }
 
 void CHL2MP_Player::GiveAllItems( void )

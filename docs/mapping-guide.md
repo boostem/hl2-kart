@@ -26,7 +26,7 @@ How to build a kart track in Hammer (Windows).
 | `kart_boost_pad` | brush trigger | Boosts karts driving onto it. Keyvalues `boost_duration` (1 s), `boost_scale` (1.4), `cooldown` (1 s); output `OnBoost` (activator: the kart). See [Boost pads](#boost-pads). |
 | `kart_start_lights` | point | The start-light tower prop (`models/kart/props/start_lights.mdl`). `skin` (also an input) lights a lamp: 0 off, 1 red, 2 yellow, 3 green. See [dressing-kit.md](dressing-kit.md). |
 | `kart_path_node` | point | A point on the bots' racing line. Keyvalues `next`, `width`, `speed_scale`, `drift`. See [Racing line for bots](#4-racing-line-for-bots). |
-| `kart_item_box` | point | A floating item box. Keyvalues `respawn_time` (3 s), `scale` (0.6). Karts without an item take it; it comes back after `respawn_time`. |
+| `kart_item_box` | point | A floating item box (`models/kart/items/item_box.mdl`, a 20-unit crate with its origin on its bottom). Keyvalues `respawn_time` (3 s), `scale` (1). Karts without an item take it; it comes back after `respawn_time`. |
 
 ## 3. Track rules
 
@@ -37,7 +37,7 @@ How to build a kart track in Hammer (Windows).
 - The grid sits just behind the `kart_finish`, clear of its trigger: lap 1 starts when a kart crosses the line after GO.
 - Checkpoints about every 1500 units, plus one before and one after every shortcut, so a shortcut cannot skip a checkpoint.
 - Checkpoint and finish triggers span the whole track width, wall to wall, and are tall, so karts cannot jump over them.
-- Item boxes in rows of 3-5 across the track width, centered about 24 units above the road, a few per lap.
+- Item boxes in rows of 3-5 across the track width, centered about 24 units above the road (the entity 14 units up), a few per lap.
 - Put a `kart_respawn_zone` below the track and in every pit karts can't drive out of (or set the manager's `kill_z`).
 
 ### Respawning
