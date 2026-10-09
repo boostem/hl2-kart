@@ -743,6 +743,107 @@
 		"tall"					"100"
 	}
 
+	//////////////////////// KART HUD /////////////////////////
+	// Race HUD elements (CKartHudElement, client hl2mp/kart_hud_*.cpp). Only
+	// positions so far; each element adds its own keys when it lands.
+	// "r" is from the right/bottom edge and "c" from the center.
+
+	// Race position, top left
+	KartPosition
+	{
+		"fieldName"		"KartPosition"
+		"xpos"			"16"
+		"ypos"			"12"
+		"wide"			"120"
+		"tall"			"56"
+		"visible"		"1"
+		"enabled"		"1"
+	}
+
+	// Held item, top center
+	KartItemSlot
+	{
+		"fieldName"		"KartItemSlot"
+		"xpos"			"c-32"
+		"ypos"			"12"
+		"wide"			"64"
+		"tall"			"64"
+		"visible"		"1"
+		"enabled"		"1"
+	}
+
+	// Lap, top right
+	KartLapCounter
+	{
+		"fieldName"		"KartLapCounter"
+		"xpos"			"r136"
+		"ypos"			"12"
+		"wide"			"120"
+		"tall"			"36"
+		"visible"		"1"
+		"enabled"		"1"
+	}
+
+	// Race and lap time, under the lap
+	KartTimer
+	{
+		"fieldName"		"KartTimer"
+		"xpos"			"r136"
+		"ypos"			"48"
+		"wide"			"120"
+		"tall"			"24"
+		"visible"		"1"
+		"enabled"		"1"
+	}
+
+	// Speed, bottom right
+	KartSpeedo
+	{
+		"fieldName"		"KartSpeedo"
+		"xpos"			"r136"
+		"ypos"			"r72"
+		"wide"			"120"
+		"tall"			"56"
+		"visible"		"1"
+		"enabled"		"1"
+	}
+
+	// Countdown, final lap, finish: upper center
+	KartBanner
+	{
+		"fieldName"		"KartBanner"
+		"xpos"			"c-160"
+		"ypos"			"100"
+		"wide"			"320"
+		"tall"			"48"
+		"visible"		"1"
+		"enabled"		"1"
+	}
+
+	// Wrong way warning, center
+	KartWrongWay
+	{
+		"fieldName"		"KartWrongWay"
+		"xpos"			"c-120"
+		"ypos"			"160"
+		"wide"			"240"
+		"tall"			"40"
+		"visible"		"1"
+		"enabled"		"1"
+	}
+
+	// TEMPORARY font test (kart_hud_test), bottom left
+	KartHudTest
+	{
+		"fieldName"		"KartHudTest"
+		"xpos"			"16"
+		"ypos"			"r116"
+		"wide"			"320"
+		"tall"			"100"
+		"visible"		"1"
+		"enabled"		"1"
+	}
+
 	CHudVote
 	{
 		"fieldName"		"CHudVote"

@@ -12,6 +12,9 @@
 #include <vgui/ISurface.h>
 #include "iclientmode.h"
 #include "vgui_controls/AnimationController.h"
+#ifdef HL2MP
+#include "kart_hud_base.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -283,6 +286,11 @@ bool CHudHistoryResource::ShouldDraw( void )
 #ifdef TF_CLIENT_DLL
 	return false;
 #else
+#ifdef HL2MP
+	// Karts pick up race items, not weapons and ammo: the kart HUD shows them.
+	if ( KartHud_LocalPlayerInKart() )
+		return false;
+#endif
 	return ( ( m_iCurrentHistorySlot > 0 || m_bNeedsDraw ) && CHudElement::ShouldDraw() );
 #endif
 }
