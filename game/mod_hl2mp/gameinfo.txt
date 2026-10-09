@@ -1,12 +1,13 @@
 "GameInfo"
 {
 	game	"HL2 Kart"
-	title	"HL2 KART"
+	title	""
 	title2	""
 	type multiplayer_only
 	nomodels 0
 	nohimodel 1
 	nocrosshair 1
+	gamelogo 1
 	supportsvr	1
 	hidden_maps
 	{

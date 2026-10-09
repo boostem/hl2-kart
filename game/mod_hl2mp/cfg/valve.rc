@@ -1,0 +1,18 @@
+// HL2MP's valve.rc, plus startupmenu: load the main menu's background map
+// (scripts/ChapterBackgrounds.txt) when the game starts without +map.
+
+// Setup custom controller
+exec joystick.cfg
+
+// run a user script file if present
+exec autoexec.cfg
+
+//
+// stuff command line statements
+//
+stuffcmds
+
+// display the startup level
+startupmenu
+
+mp_forcerespawn 0

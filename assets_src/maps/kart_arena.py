@@ -333,15 +333,15 @@ def build():
     return m
 
 
-def write(m, f):
+def write(m, f, sky="sky_day01_01"):
     w = f.write
     w('versioninfo\n{\n\t"editorversion" "400"\n\t"editorbuild" "8864"\n\t"mapversion" "1"\n'
       '\t"formatversion" "100"\n\t"prefab" "0"\n}\n')
     w('visgroups\n{\n}\n')
     w('viewsettings\n{\n\t"bSnapToGrid" "1"\n\t"bShowGrid" "1"\n\t"bShowLogicalGrid" "0"\n'
       '\t"nGridSpacing" "64"\n\t"bShow3DGrid" "0"\n}\n')
-    w('world\n{\n\t"id" "1"\n\t"mapversion" "1"\n\t"classname" "worldspawn"\n\t"skyname" "sky_day01_01"\n'
-      '\t"maxpropscreenwidth" "-1"\n\t"detailvbsp" "detail.vbsp"\n\t"detailmaterial" "detail/detailsprites"\n')
+    w('world\n{\n\t"id" "1"\n\t"mapversion" "1"\n\t"classname" "worldspawn"\n\t"skyname" "%s"\n'
+      '\t"maxpropscreenwidth" "-1"\n\t"detailvbsp" "detail.vbsp"\n\t"detailmaterial" "detail/detailsprites"\n' % sky)
     def solid(sid, sides, centre, color):
         w('\tsolid\n\t{\n\t\t"id" "%d"\n' % sid)
         for side_id, mat, loop in sides:
