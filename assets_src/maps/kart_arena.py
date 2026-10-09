@@ -234,6 +234,27 @@ def build():
     for i in range(8):
         m.entity("info_player_deathmatch", (sx, -INNER + 160 + i * 128, 8), angles="0 0 0")
 
+    # Racing line for the bots: a closed loop of kart_path_node, counter-clockwise like the race, 16 above the floor.
+    # The straights run down the lanes (the south one nearer the island, clear of its cones); each corner is an arc
+    # of radius 600 round the island's corner, driven a little slower, with a drift hint on the node before it.
+    def corner(cx, cy, a0):
+        return [(cx + 600 * math.cos(math.radians(a)), cy + 600 * math.sin(math.radians(a))) for a in (a0, a0 + 45, a0 + 90)]
+
+    straight, arc = {"width": "256"}, {"width": "192", "speed_scale": "0.85"}
+    hint = dict(straight, drift="1")
+    nodes = [((FINISH_X, -2300), straight), ((-1100, -2170), straight), ((-500, -2160), straight),
+             ((100, -2160), straight), ((700, -2170), straight), ((1250, -2330), hint)]
+    nodes += [(p, arc) for p in corner(ISLAND, -ISLAND, -90)]
+    nodes += [((2400, -1100), straight), ((2400, -300), straight), ((2400, 500), straight), ((2392, 1200), hint)]
+    nodes += [(p, arc) for p in corner(ISLAND, ISLAND, 0)]
+    nodes += [((1200, 2400), straight), ((400, 2400), straight), ((-300, 2400), straight), ((-1150, 2400), hint)]
+    nodes += [(p, arc) for p in corner(-ISLAND, ISLAND, 90)]
+    nodes += [((-2400, 1100), straight), ((-2400, 300), straight), ((-2400, -500), straight), ((-2392, -1200), hint)]
+    nodes += [(p, arc) for p in corner(-ISLAND, -ISLAND, 180)]
+    for i, ((x, y), kv) in enumerate(nodes):
+        m.entity("kart_path_node", (int(round(x)), int(round(y)), 16), targetname="line%02d" % i,
+                 next="line%02d" % ((i + 1) % len(nodes)), **kv)
+
     # Start line painted on the floor along the finish trigger: a 48-wide hazard stripe overlay, wall to island.
     w, l = 24, (INNER - ISLAND) // 2
     m.entity("info_overlay", (FINISH_X, -LANE_MID, 0), material=START_LINE.upper(), sides=str(line_floor["top"]),
