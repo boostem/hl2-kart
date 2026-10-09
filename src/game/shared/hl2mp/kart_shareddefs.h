@@ -61,22 +61,28 @@ extern ConVar kart_drift_slip_rate;
 // Kart collision hull and eye position. A kart does not crouch, so the duck
 // hull is the standing hull and the duck view is the standing view.
 // The hull is an axis-aligned box that doesn't turn with the kart, so it can't
-// match the 112 x 70 x 50 kart model: it is as wide as the model's half-width
-// allows (the sides stop at walls, the nose and tail go in about 24 units) and
-// tall enough for the roll hoop. The view is at the model's vehicle_driver_eyes.
+// match the 123 x 71 x 43 kart model: it is as wide as the model's half-width
+// allows (the sides stop at walls, the nose and tail go in about 30 units) and
+// tall enough for the wing (and the scrap kart's roll hoop). The view is at the model's vehicle_driver_eyes.
 #define KART_HULL_MIN	Vector( -32, -32, 0 )
 #define KART_HULL_MAX	Vector( 32, 32, 48 )
 #define KART_VIEW		Vector( 0, 0, 40 )
 #define KART_DEAD_VIEW	Vector( 0, 0, 14 )
 
-// The scrap kart, built for this mod (assets_src/kart_scrap/). Its attachments:
-// wheel_fl/fr/rl/rr (tyre contact patches), exhaust, vehicle_driver_eyes and
-// item_hold (behind the kart).
-#define KART_DEFAULT_MODEL		"models/kart/kart_scrap.mdl"
+// The racer kart, built for this mod (assets_src/kart_racer/). Its attachments,
+// which every kart model built for the mod has: wheel_fl/fr/rl/rr (tyre contact
+// patches), exhaust, vehicle_driver_eyes and item_hold (behind the kart).
+#define KART_DEFAULT_MODEL		"models/kart/kart_racer.mdl"
+
+// The scrap kart (assets_src/kart_scrap/), the default before the racer kart.
+// Still precached for kart_model.
+#define KART_SCRAP_MODEL		"models/kart/kart_scrap.mdl"
 
 // The earlier placeholder, HL2's jeep: Valve content, mounted from
 // hl2_misc.vpk and referenced by path only. Still precached for kart_model.
+// Its nose points along the model's -Y, so it renders turned by this much.
 #define KART_PLACEHOLDER_MODEL	"models/buggy.mdl"
+#define KART_PLACEHOLDER_YAW	90.0f
 
 // Range of m_flKartSpeed as sent to other players (12 bits over this range
 // gives 0.5 u/s steps). The local player gets the unscaled float.

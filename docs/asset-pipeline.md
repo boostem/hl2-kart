@@ -139,6 +139,10 @@ layout in the script, regenerate the VMF, compile, and commit all three. The VMF
 - **Checkpoints**: 5 `kart_checkpoint` (tools/toolstrigger, full lane width, 512 tall), with a cone at each end:
   1 mid south straight (x 0), 2 east lane after the ramp (y 1280), 3 north lane before the jump (x 1536), 4 north
   lane after the landing (x -1280), 5 mid west lane (y 0). Check them with `kart_race_dump`.
+- **Racing line**: 30 `kart_path_node` (`line00`, at the finish, to `line29`), counter-clockwise like the race,
+  16 above the floor. The straights run down the lanes (the south one at y -2160, clear of its cones), each corner is
+  an arc of radius 600 round the island's corner at `speed_scale` 0.85, and the node before each corner is a `drift`
+  hint.
 - No respawn zone: there is no `kart_respawn_zone` entity yet, and the arena is walled with nothing to fall off.
 - **South straight**: about 3300 units from the line to the curve, with traffic cones (physics props) down its
   middle.

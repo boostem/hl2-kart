@@ -111,6 +111,10 @@ public:
 	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
 	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
 	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
+	// Stops the kart and clears its drift and hop, heading flYaw.
+	void ResetKartMovement( float flYaw );
+	// Moves the kart to vecOrigin, stopped and heading flYaw (kart bots unsticking).
+	void KartTeleport( const Vector &vecOrigin, float flYaw );
 
 	// Kart race state (see kart_race_shared.h). The race manager drives it.
 	int GetKartLap( void ) const { return m_nKartLap; }
@@ -124,7 +128,14 @@ public:
 	float GetKartFinishTime( void ) const { return m_flKartFinishTime; }
 	bool IsKartLateJoin( void ) const { return m_bKartLateJoin; }
 	bool IsKartDNF( void ) const { return m_bKartDNF; }
+	bool IsKartWrongWay( void ) const { return m_bKartWrongWay; }
 	void ResetKartRaceState( void );
+
+	// Puts the kart back on the track at the last checkpoint it hit, facing the
+	// next one, stopped and briefly frozen (kart_respawn_zone, kill_z and the
+	// kart_respawn command). Lap and checkpoint progress are kept. False when
+	// the kart can't be respawned (dead, observing, not a kart).
+	bool KartRespawnAtCheckpoint( void );
 
 	// Kart item (see kart_items.h). Server-authoritative, not predicted.
 	int GetKartItem( void ) const { return m_nKartItem; }
@@ -218,6 +229,10 @@ private:
 	CNetworkVar( bool, m_bKartLateJoin );	// joined while the race ran: no position, races the next one
 	bool m_bKartInRace;		// on the track when the current race started
 	bool m_bKartDNF;		// finished for the player when kart_finish_timeout ran out
+	CNetworkVar( bool, m_bKartWrongWay );	// driving against the track, see CKartRaceManager::UpdateWrongWay
+	float m_flKartWrongWayTime;	// seconds the wrong-way flag has wanted to flip
+	float m_flKartRespawnUnfreezeTime;	// server time a checkpoint respawn's freeze ends, 0 when not frozen by one
+	float m_flKartNextRespawnCommand;	// server time kart_respawn may be used again
 
 	// Kart item state.
 	void KartItemPostThink( void );

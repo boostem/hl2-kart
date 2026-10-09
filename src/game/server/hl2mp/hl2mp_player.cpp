@@ -45,6 +45,9 @@ extern ConVar kart_debug_server;
 
 #define HL2MP_COMMAND_MAX_RATE 0.3
 
+ConVar kart_respawn_freeze( "kart_respawn_freeze", "0.75", FCVAR_NOTIFY, "Seconds a kart is held still after being put back on the track at its last checkpoint.", true, 0, true, 5 );
+ConVar kart_respawn_cooldown( "kart_respawn_cooldown", "3", FCVAR_NOTIFY, "Seconds between two uses of the kart_respawn command by one player.", true, 0, false, 0 );
+
 void DropPrimedFragGrenade( CHL2MP_Player *pPlayer, CBaseCombatWeapon *pGrenade );
 
 LINK_ENTITY_TO_CLASS( player, CHL2MP_Player );
@@ -122,6 +125,7 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropFloat( SENDINFO( m_flKartBestLap ), -1, SPROP_NOSCALE ),
 	SendPropFloat( SENDINFO( m_flKartTotalTime ), -1, SPROP_NOSCALE ),
 	SendPropBool( SENDINFO( m_bKartLateJoin ) ),
+	SendPropBool( SENDINFO( m_bKartWrongWay ) ),
 
 	// kart item, for everyone's HUD and the bots
 	SendPropInt( SENDINFO( m_nKartItem ), KART_NET_ITEM_BITS, SPROP_UNSIGNED ),
@@ -198,6 +202,8 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartSlipAngle = 0.0f;
 	m_flKartDriftTime = 0.0f;
 	m_flKartHopTime = 0.0f;
+	m_flKartRespawnUnfreezeTime = 0.0f;
+	m_flKartNextRespawnCommand = 0.0f;
 
 	ResetKartRaceState();
 
@@ -251,6 +257,7 @@ void CHL2MP_Player::Precache( void )
 	   	 PrecacheModel( g_ppszRandomCombineModels[i] );
 
 	PrecacheModel( KART_DEFAULT_MODEL );
+	PrecacheModel( KART_SCRAP_MODEL );
 	PrecacheModel( KART_PLACEHOLDER_MODEL );
 	if ( kart_model.GetString()[0] )
 	{
@@ -267,6 +274,7 @@ void CHL2MP_Player::Precache( void )
 	PrecacheScriptSound( "Kart.EngineRev" );
 	PrecacheScriptSound( "Kart.Skid" );
 	PrecacheScriptSound( "Kart.Impact" );
+	PrecacheScriptSound( KART_SOUND_RESPAWN );
 }
 
 void CHL2MP_Player::GiveAllItems( void )
@@ -450,14 +458,7 @@ void CHL2MP_Player::Spawn(void)
 	{
 		// The kart is the player: no weapons, no suit, no damage yet (M1), and it is
 		// drawn for the local player too so third person shows the kart.
-		m_flKartSpeed = 0.0f;
-		m_flKartYaw = GetAbsAngles()[YAW];	// spawn point facing
-		m_flKartReverseTime = 0.0f;
-		m_flKartBumpCooldown = 0.0f;
-		m_nKartDriftDir = 0;
-		m_flKartSlipAngle = 0.0f;
-		m_flKartDriftTime = 0.0f;
-		m_flKartHopTime = 0.0f;
+		ResetKartMovement( GetAbsAngles()[YAW] );	// spawn point facing
 		m_Local.m_bForceLocalPlayerDraw = true;
 		m_takedamage = DAMAGE_NO;
 		m_Local.m_iHideHUD |= KART_HIDEHUD_BITS;
@@ -470,6 +471,8 @@ void CHL2MP_Player::Spawn(void)
 	}
 	
 	AddFlag(FL_ONGROUND); // set the player on the ground at the start of the round.
+
+	m_flKartRespawnUnfreezeTime = 0.0f;
 
 	m_impactEnergyScale = HL2MPPLAYER_PHYSDAMAGE_SCALE;
 
@@ -732,6 +735,34 @@ void CHL2MP_Player::SetKartModel( void )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: A kart at rest heading flYaw: no speed, drift, slip or hop.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::ResetKartMovement( float flYaw )
+{
+	m_flKartSpeed = 0.0f;
+	m_flKartYaw = flYaw;
+	m_flKartReverseTime = 0.0f;
+	m_flKartBumpCooldown = 0.0f;
+	m_nKartDriftDir = 0;
+	m_flKartSlipAngle = 0.0f;
+	m_flKartDriftTime = 0.0f;
+	m_flKartHopTime = 0.0f;
+	m_bKartWrongWay = false;
+	m_flKartWrongWayTime = 0.0f;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Puts the kart at vecOrigin, stopped and heading flYaw.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::KartTeleport( const Vector &vecOrigin, float flYaw )
+{
+	QAngle angles( 0.0f, flYaw, 0.0f );
+	Teleport( &vecOrigin, &angles, &vec3_origin );
+	SnapEyeAngles( angles );
+	ResetKartMovement( flYaw );
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Tint the kart with the player's cl_kart_color. Bots have no userinfo,
 //			so they take a palette entry from their entity index.
 //-----------------------------------------------------------------------------
@@ -765,9 +796,64 @@ void CHL2MP_Player::ResetKartRaceState( void )
 	m_bKartLateJoin = false;
 	m_bKartInRace = false;
 	m_bKartDNF = false;
+	m_bKartWrongWay = false;
+	m_flKartWrongWayTime = 0.0f;
 
 	// A new race starts empty-handed.
 	KartClearItem();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Back on the track at the last checkpoint hit (see
+//			CKartRaceManager::GetRespawnPoint), or on a spawn point on a map
+//			without a route. The race state is left alone, so a respawn loses
+//			no lap or checkpoint, only the time it takes.
+//-----------------------------------------------------------------------------
+bool CHL2MP_Player::KartRespawnAtCheckpoint( void )
+{
+	if ( !IsInKart() || !IsAlive() || IsObserver() )
+		return false;
+
+	Vector vecOrigin;
+	QAngle angFacing;
+	if ( !KartRaceManager() || !KartRaceManager()->GetRespawnPoint( this, vecOrigin, angFacing ) )
+	{
+		CBaseEntity *pSpot = EntSelectSpawnPoint();
+		if ( !pSpot )
+			return false;
+
+		vecOrigin = pSpot->GetAbsOrigin() + Vector( 0, 0, 1 );
+		angFacing = QAngle( 0, pSpot->GetAbsAngles()[YAW], 0 );
+	}
+
+	Teleport( &vecOrigin, &angFacing, &vec3_origin );
+	SnapEyeAngles( angFacing );
+	SetGroundEntity( NULL );
+
+	// Stopped, out of any drift or hop, facing forward.
+	ResetKartMovement( angFacing[YAW] );
+
+	// No lerp across the map on the clients.
+	m_iSpawnInterpCounter = ( m_iSpawnInterpCounter + 1 ) % 8;
+
+	if ( kart_respawn_freeze.GetFloat() > 0.0f )
+	{
+		AddFlag( FL_FROZEN );
+		m_flKartRespawnUnfreezeTime = gpGlobals->curtime + kart_respawn_freeze.GetFloat();
+	}
+
+	color32 black = { 0, 0, 0, 255 };
+	UTIL_ScreenFade( this, black, 0.5f, 0.1f, FFADE_IN | FFADE_PURGE );
+
+	EmitSound( KART_SOUND_RESPAWN );
+
+	if ( kart_debug_server.GetBool() )
+	{
+		Msg( "[kart] %s respawned at %.0f %.0f %.0f facing %.0f (lap %d, next checkpoint %d)\n", GetPlayerName(),
+			vecOrigin.x, vecOrigin.y, vecOrigin.z, angFacing[YAW], m_nKartLap.Get(), m_nKartNextCheckpoint.Get() );
+	}
+
+	return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -988,6 +1074,16 @@ void CHL2MP_Player::PostThink( void )
 			Vector vecStart = GetAbsOrigin() + Vector( 0.0f, 0.0f, 24.0f );
 			NDebugOverlay::Line( vecStart, vecStart + vecForward * 128.0f, 255, 255, 0, true, 0.1f );
 			NDebugOverlay::Box( GetAbsOrigin(), KART_HULL_MIN, KART_HULL_MAX, 0, 255, 255, 0, 0.1f );
+		}
+
+		// A checkpoint respawn's freeze is over, unless the race flow holds the karts.
+		if ( m_flKartRespawnUnfreezeTime > 0.0f && gpGlobals->curtime >= m_flKartRespawnUnfreezeTime )
+		{
+			m_flKartRespawnUnfreezeTime = 0.0f;
+			if ( !HL2MPRules()->IsIntermission() && !HL2MPRules()->IsKartRaceFrozen() )
+			{
+				RemoveFlag( FL_FROZEN );
+			}
 		}
 	}
 
@@ -1456,6 +1552,20 @@ bool CHL2MP_Player::ClientCommand( const CCommand &args )
 	}
 	else if ( FStrEq( args[0], "joingame" ) )
 	{
+		return true;
+	}
+	else if ( FStrEq( args[0], "kart_respawn" ) )
+	{
+		// Back to the last checkpoint, for a kart that is stuck. Not while held
+		// on the grid, at the results or still frozen from the last respawn.
+		if ( ShouldRunRateLimitedCommand( args ) && gpGlobals->curtime >= m_flKartNextRespawnCommand
+			&& IsInKart() && !( GetFlags() & FL_FROZEN ) )
+		{
+			if ( KartRespawnAtCheckpoint() )
+			{
+				m_flKartNextRespawnCommand = gpGlobals->curtime + kart_respawn_cooldown.GetFloat();
+			}
+		}
 		return true;
 	}
 
