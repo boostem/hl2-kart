@@ -188,6 +188,7 @@ public:
 	void UpdateKartDriver( void );
 	void RemoveKartDriver( void );
 	float GetKartDriverLean( void ) const { return m_flKartDriverLean; }	// -1 full left .. +1 full right
+	float GetKartDriverLook( void ) const { return m_flKartDriverLook; }	// -1 full left .. +1 full right
 	bool IsKartCamTooClose( void ) const { return m_bKartCamTooClose; }
 
 	virtual void PostThink( void );
@@ -302,6 +303,7 @@ private:
 	int		m_nKartDriverModel;
 	C_KartDriver	*m_pKartDriver;
 	float	m_flKartDriverLean;	// see GetKartDriverLean
+	float	m_flKartDriverLook;	// see GetKartDriverLook
 };
 
 inline C_HL2MP_Player *ToHL2MPPlayer( CBaseEntity *pEntity )
