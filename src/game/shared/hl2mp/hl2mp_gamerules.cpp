@@ -64,12 +64,14 @@ BEGIN_NETWORK_TABLE_NOBASE( CHL2MPRules, DT_HL2MPRules )
 		RecvPropTime( RECVINFO( m_flKartStateEndTime ) ),
 		RecvPropInt( RECVINFO( m_nKartLaps ) ),
 		RecvPropInt( RECVINFO( m_nKartRacers ) ),
+		RecvPropString( RECVINFO( m_szKartMusic ) ),
 	#else
 		SendPropBool( SENDINFO( m_bTeamPlayEnabled ) ),
 		SendPropInt( SENDINFO( m_nKartRaceState ), KART_NET_RACE_STATE_BITS, SPROP_UNSIGNED ),
 		SendPropTime( SENDINFO( m_flKartStateEndTime ) ),
 		SendPropInt( SENDINFO( m_nKartLaps ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
 		SendPropInt( SENDINFO( m_nKartRacers ), KART_NET_POSITION_BITS, SPROP_UNSIGNED ),
+		SendPropString( SENDINFO( m_szKartMusic ) ),
 	#endif
 
 END_NETWORK_TABLE()
@@ -215,6 +217,7 @@ CHL2MPRules::CHL2MPRules()
 {
 	m_nKartLaps = 0;
 	m_nKartRacers = 0;
+	m_szKartMusic.GetForModify()[0] = '\0';
 
 #ifndef CLIENT_DLL
 	// Create the team managers

@@ -111,6 +111,37 @@
 	}
 }
 
+// Item hits (CHL2MP_Player::KartApplyHit), heard by everyone near: the impact on any hit,
+// and a spin-out tumbles on top of it
+"Kart.HitImpact"
+{
+	"channel"		"CHAN_BODY"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_85dB"
+	"pitch"			"85,95"
+
+	"rndwave"
+	{
+		"wave"		"physics/metal/metal_box_impact_hard1.wav"
+		"wave"		"physics/metal/metal_box_impact_hard2.wav"
+		"wave"		"physics/metal/metal_box_impact_hard3.wav"
+	}
+}
+
+"Kart.HitSpinout"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.9"
+	"soundlevel"	"SNDLVL_80dB"
+	"pitch"			"95,110"
+
+	"rndwave"
+	{
+		"wave"		"vehicles/v8/vehicle_rollover1.wav"
+		"wave"		"vehicles/v8/vehicle_rollover2.wav"
+	}
+}
+
 // Driving onto a boost pad (kart_boost_pad), from the kart, heard by everyone near
 "Kart.BoostPad"
 {
@@ -122,6 +153,34 @@
 	"wave"			"ambient/machines/thumper_hit.wav"
 }
 
+// Race HUD (CKartWrongWay, CKartBanner), played by the client to the local player only
+"Kart.WrongWay"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.6"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"buttons/button10.wav"
+}
+
+"Kart.FinalLap"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"buttons/button17.wav"
+}
+
+"Kart.Finish"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"0.8"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"buttons/button14.wav"
+}
+
 // Nitro Can use
 "Kart.Nitro"
 {
@@ -130,4 +189,71 @@
 	"soundlevel"	"SNDLVL_80dB"
 
 	"wave"			"vehicles/v8/v8_turbo_on_loop1.wav"
+}
+
+// Race music (kart_race_manager "music"), played by each client to itself from GO (kart_music.cpp).
+// One entry per track, named Kart.Music.<file name>; volume is scaled by kart_music_volume.
+// HL2 score by path; listen before picking a track for a map (docs/valve-content.md lists them all).
+"Kart.Music.hl2_song20_submix0"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song20_submix0.mp3"
+}
+
+"Kart.Music.hl2_song20_submix4"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song20_submix4.mp3"
+}
+
+"Kart.Music.hl2_song14"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song14.mp3"
+}
+
+"Kart.Music.hl2_song16"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song16.mp3"
+}
+
+"Kart.Music.hl2_song29"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song29.mp3"
+}
+
+"Kart.Music.hl2_song3"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/hl2_song3.mp3"
+}
+
+// Finish sting, played when the local kart crosses the line on its last lap while the track fades out.
+"Kart.Music.Finish"
+{
+	"channel"		"CHAN_STATIC"
+	"volume"		"1.0"
+	"soundlevel"	"SNDLVL_NONE"
+
+	"wave"			"#music/stingers/hl1_stinger_song8.mp3"
 }

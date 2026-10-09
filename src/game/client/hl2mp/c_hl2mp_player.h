@@ -12,6 +12,7 @@
 class C_HL2MP_Player;
 #include "c_basehlplayer.h"
 #include "hl2mp_player_shared.h"
+#include "kart_shareddefs.h"
 #include "beamdraw.h"
 #include "particles_simple.h"
 
@@ -143,6 +144,14 @@ public:
 	float GetKartBoostScale( void ) const { return m_flKartBoostScale; }
 	void KartGiveBoost( float flDuration, float flSpeedScale );
 
+	// Kart hit reactions (spin-out, stun). Shared, see hl2mp_player_shared.cpp;
+	// the server starts them (CHL2MP_Player::KartApplyHit).
+	int GetKartHitState( void ) const { return m_nKartHitState; }
+	float GetKartHitEndTime( void ) const { return m_flKartHitEndTime; }
+	bool IsKartHit( void ) const { return m_nKartHitState != KART_HIT_NONE; }
+	bool IsKartSpinningOut( void ) const { return m_nKartHitState == KART_HIT_SPINOUT; }
+	bool IsKartHitImmune( void ) const;
+	float GetKartHitSpinYaw( void ) const;
 	// Only kart bots (server side) drive at another top speed; the local kart never does.
 	float GetKartTopSpeedScale( void ) const { return 1.0f; }
 
@@ -192,6 +201,7 @@ public:
 	void RemoveKartDriver( void );
 	float GetKartDriverLean( void ) const { return m_flKartDriverLean; }	// -1 full left .. +1 full right
 	float GetKartDriverLook( void ) const { return m_flKartDriverLook; }	// -1 full left .. +1 full right
+	float GetKartSteeringWheelTurn( void ) const;	// degrees the steering wheel is turned about its column, positive to the left
 	bool IsKartCamTooClose( void ) const { return m_bKartCamTooClose; }
 
 	virtual void PostThink( void );
@@ -257,6 +267,8 @@ private:
 	Vector	m_vecKartGroundNormal;	// normal of the ground under the kart, (0,0,1) in the air
 	Vector	m_vecKartTiltNormal;	// m_vecKartGroundNormal smoothed for drawing, see kart_tilt_smooth
 	float	m_flKartTiltTime;		// client time m_vecKartTiltNormal was last smoothed
+	int		m_nKartHitState;	// KartHitType being played out, KART_HIT_NONE when none
+	float	m_flKartHitEndTime;	// time the hit ends (and kart_hit_immunity starts counting)
 	QAngle	m_angKartRenderAngles;	// what GetRenderAngles() returns in kart mode
 
 	// Kart race state, from the server's race manager.
