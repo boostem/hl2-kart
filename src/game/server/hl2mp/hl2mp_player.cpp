@@ -15,6 +15,7 @@
 #include "in_buttons.h"
 #include "hl2mp_gamerules.h"
 #include "kart_shareddefs.h"
+#include "kart_race_entities.h"
 #include "KeyValues.h"
 #include "team.h"
 #include "weapon_hl2mpbase.h"
@@ -1530,6 +1531,18 @@ CBaseEntity* CHL2MP_Player::EntSelectSpawnPoint( void )
 	CBaseEntity *pLastSpawnPoint = g_pLastSpawn;
 	edict_t		*player = edict();
 	const char *pSpawnpointName = "info_player_deathmatch";
+
+	// Karts line up on the race grid when the map has one. The deathmatch
+	// spawn bookkeeping below is left alone so free drive is unchanged.
+	if ( IsInKart() )
+	{
+		pSpot = KartRace_SelectGridSpawn( this );
+		if ( pSpot )
+		{
+			m_flSlamProtectTime = gpGlobals->curtime + 0.5;
+			return pSpot;
+		}
+	}
 
 	if ( HL2MPRules()->IsTeamplay() == true )
 	{
