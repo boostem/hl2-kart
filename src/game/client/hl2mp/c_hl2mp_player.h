@@ -15,6 +15,7 @@ class C_HL2MP_Player;
 #include "beamdraw.h"
 
 class CSoundPatch;
+class C_KartDriver;
 
 //=============================================================================
 //=============================================================================
@@ -126,6 +127,10 @@ public:
 	float GetKartYaw( void ) const { return m_flKartYaw; }
 	bool IsDrifting( void ) const { return m_nKartDriftDir != 0; }
 	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
+	int GetKartSteer( void ) const { return m_nKartSteer; }
+	// Drawn steering: the front wheels' angle in degrees (+ right), smoothed, counter-steering in a drift.
+	// The driver's lean and hands (grip_l/grip_r attachments) follow it.
+	float GetKartSteerAngle( void ) const { return m_flKartSteerAngle; }
 	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
 	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
 	float GetKartDriftCharge( void ) const { return m_flKartDriftCharge; }
@@ -168,6 +173,16 @@ public:
 	// Tire marks behind the rear wheels while drifting, for every kart player in PVS.
 	void UpdateKartSkidmarks( void );
 	void ShootKartSkidmark( const char *pszAttachment, float flSide, const Vector &vecDir );
+
+	// Turns the front wheels and steering wheel bones of karts that have them.
+	void UpdateKartSteering( void );
+	virtual void BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed ) OVERRIDE;
+
+	// The driver: the player's model seated in the kart, hands on grip_l/grip_r, leaning into turns.
+	void UpdateKartDriver( void );
+	void RemoveKartDriver( void );
+	float GetKartDriverLean( void ) const { return m_flKartDriverLean; }	// -1 full left .. +1 full right
+	bool IsKartCamTooClose( void ) const { return m_bKartCamTooClose; }
 
 	virtual void PostThink( void );
 
@@ -221,6 +236,7 @@ private:
 	float	m_flKartReverseTime;	// seconds the brake has been held at a standstill
 	float	m_flKartBumpCooldown;	// seconds until the next bump sound may play
 	int		m_nKartDriftDir;	// drift direction, the steer sign at entry (+1 right, -1 left), 0 when not drifting
+	int		m_nKartSteer;		// steer input this tick (+1 right, -1 left, 0 none)
 	float	m_flKartSlipAngle;	// heading minus velocity yaw, degrees
 	float	m_flKartDriftTime;	// seconds into the current drift
 	float	m_flKartHopTime;	// seconds airborne since a hop, 0 when not hopping
@@ -262,6 +278,17 @@ private:
 	float	m_flKartCamYaw;		// lagged camera heading, chasing m_flKartYaw
 	bool	m_bKartCamActive;	// the chase camera ran last frame; otherwise snap m_flKartCamYaw
 	bool	m_bKartCamTooClose;	// a wall pulled the camera into the kart: hide the local model
+
+	// Steering animation (client only): bone indices, -1 when the kart model has no such bone.
+	float	m_flKartSteerAngle;	// see GetKartSteerAngle
+	int		m_iKartBoneSteerFL;
+	int		m_iKartBoneSteerFR;
+	int		m_iKartBoneSteeringWheel;
+
+	// Driver (client only), drawn with m_nKartDriverModel, the server's pick from cl_playermodel.
+	int		m_nKartDriverModel;
+	C_KartDriver	*m_pKartDriver;
+	float	m_flKartDriverLean;	// see GetKartDriverLean
 };
 
 inline C_HL2MP_Player *ToHL2MPPlayer( CBaseEntity *pEntity )

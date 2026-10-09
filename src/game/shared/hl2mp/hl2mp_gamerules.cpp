@@ -848,6 +848,7 @@ void CHL2MPRules::ClientSettingsChanged( CBasePlayer *pPlayer )
 	if ( pHL2Player->IsInKart() )
 	{
 		pHL2Player->ApplyKartColor();
+		pHL2Player->ApplyKartDriverModel();
 		BaseClass::ClientSettingsChanged( pPlayer );
 		return;
 	}

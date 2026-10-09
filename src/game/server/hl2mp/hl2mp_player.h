@@ -100,6 +100,7 @@ public:
 	void SetPlayerModel( void );
 	void SetPlayerTeamModel( void );
 	void SetKartModel( void );
+	void ApplyKartDriverModel( void );
 	static const char *GetKartModelName( void );
 	void ApplyKartColor( void );
 
@@ -109,6 +110,7 @@ public:
 	float GetKartYaw( void ) const { return m_flKartYaw; }
 	bool IsDrifting( void ) const { return m_nKartDriftDir != 0; }
 	int GetKartDriftDir( void ) const { return m_nKartDriftDir; }
+	int GetKartSteer( void ) const { return m_nKartSteer; }
 	float GetKartSlipAngle( void ) const { return m_flKartSlipAngle; }
 	float GetKartDriftTime( void ) const { return m_flKartDriftTime; }
 	float GetKartDriftCharge( void ) const { return m_flKartDriftCharge; }
@@ -219,6 +221,8 @@ private:
 	CNetworkVar( float, m_flKartReverseTime );	// seconds the brake has been held at a standstill
 	CNetworkVar( float, m_flKartBumpCooldown );	// seconds until the next bump sound may play
 	CNetworkVar( int, m_nKartDriftDir );		// drift direction, the steer sign at entry (+1 right, -1 left), 0 when not drifting
+	CNetworkVar( int, m_nKartDriverModel );	// model index of the driver the client seats in the kart
+	CNetworkVar( int, m_nKartSteer );		// steer input this tick (+1 right, -1 left, 0 none), for the steering animation
 	CNetworkVar( float, m_flKartSlipAngle );	// heading minus velocity yaw, degrees
 	CNetworkVar( float, m_flKartDriftTime );	// seconds into the current drift
 	CNetworkVar( float, m_flKartHopTime );		// seconds airborne since a hop, 0 when not hopping

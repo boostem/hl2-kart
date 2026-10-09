@@ -16,6 +16,10 @@ $attachment "exhaust" "root" -61 -8 25.5 rigid rotate -15 180 0
 $attachment "vehicle_driver_eyes" "root" -8 0 40 rigid rotate 0 0 0
 $attachment "item_hold" "root" -64 0 22 rigid rotate 0 0 0
 
+// The driver's hands on the steering wheel, which turns with the steering.
+$attachment "grip_l" "steering_wheel" 3.75 6.49519 0 rigid rotate 0 0 0
+$attachment "grip_r" "steering_wheel" 3.75 -6.49519 0 rigid rotate 0 0 0
+
 $collisionmodel "kart_racer_phys.smd"
 {
 	$mass 180

@@ -116,6 +116,8 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropInt( SENDINFO( m_iPlayerSoundType), 3 ),
 	SendPropBool( SENDINFO( m_bKartMode ) ),
 	SendPropInt( SENDINFO( m_nKartDriftDir ), 2 ),	// signed: -1, 0, 1. Everyone gets it, for drift effects on other karts.
+	SendPropInt( SENDINFO( m_nKartSteer ), 2 ),	// signed: -1, 0, 1. Everyone gets it, to turn the wheels of other karts.
+	SendPropModelIndex( SENDINFO( m_nKartDriverModel ) ),
 	SendPropInt( SENDINFO( m_nKartDriftTier ), 2, SPROP_UNSIGNED ),	// 0-3, for mini-turbo spark effects on every kart
 	SendPropFloat( SENDINFO( m_flKartBoostEndTime ), -1, SPROP_NOSCALE ),	// full precision: the local player predicts it
 
@@ -201,8 +203,10 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartSpeed = 0.0f;
 	m_flKartYaw = 0.0f;
 	m_flKartReverseTime = 0.0f;
+	m_nKartDriverModel = -1;
 	m_flKartBumpCooldown = 0.0f;
 	m_nKartDriftDir = 0;
+	m_nKartSteer = 0;
 	m_flKartSlipAngle = 0.0f;
 	m_flKartDriftTime = 0.0f;
 	m_flKartHopTime = 0.0f;
@@ -739,6 +743,7 @@ void CHL2MP_Player::SetKartModel( void )
 	SetCollisionBounds( KART_HULL_MIN, KART_HULL_MAX );
 	ResetSequence( 0 );
 	ApplyKartColor();
+	ApplyKartDriverModel();
 
 	m_flNextModelChangeTime = gpGlobals->curtime + MODEL_CHANGE_INTERVAL;
 }
@@ -753,6 +758,7 @@ void CHL2MP_Player::ResetKartMovement( float flYaw )
 	m_flKartReverseTime = 0.0f;
 	m_flKartBumpCooldown = 0.0f;
 	m_nKartDriftDir = 0;
+	m_nKartSteer = 0;
 	m_flKartSlipAngle = 0.0f;
 	m_flKartDriftTime = 0.0f;
 	m_flKartHopTime = 0.0f;
@@ -773,6 +779,31 @@ void CHL2MP_Player::KartTeleport( const Vector &vecOrigin, float flYaw )
 	Teleport( &vecOrigin, &angles, &vec3_origin );
 	SnapEyeAngles( angles );
 	ResetKartMovement( flYaw );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The driver seated in the kart: the player's cl_playermodel (set in
+//			Options > Multiplayer), or the default citizen when it is unset or
+//			not a player model. Bots have no userinfo and get a citizen by
+//			entity index.
+//-----------------------------------------------------------------------------
+void CHL2MP_Player::ApplyKartDriverModel( void )
+{
+	const char *pszModel = g_ppszRandomCitizenModels[0];
+	if ( IsFakeClient() )
+	{
+		pszModel = g_ppszRandomCitizenModels[entindex() % ARRAYSIZE( g_ppszRandomCitizenModels )];
+	}
+	else
+	{
+		const char *pszPlayerModel = engine->GetClientConVarValue( entindex(), "cl_playermodel" );
+		if ( ValidatePlayerModel( pszPlayerModel ) && modelinfo->GetModelIndex( pszPlayerModel ) >= 0 )
+		{
+			pszModel = pszPlayerModel;
+		}
+	}
+
+	m_nKartDriverModel = modelinfo->GetModelIndex( pszModel );
 }
 
 //-----------------------------------------------------------------------------
