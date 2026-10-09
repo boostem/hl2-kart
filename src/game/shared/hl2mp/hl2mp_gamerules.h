@@ -198,6 +198,7 @@ private:
 	int KartCountRacers( int *pnFinished = NULL, bool *pbAllReady = NULL );
 	void KartGetGridOrder( CUtlVector< CHL2MP_Player * > &order );
 
+	int m_iKartRacesDone;				// races finished on this map
 	int m_iKartCountdownTick;			// last countdown second announced
 	bool m_bKartRestartPending;			// kart_race_restart, done on the next think
 	CUtlVector< int > m_KartGridOrder;	// userids by the last race's finish order
