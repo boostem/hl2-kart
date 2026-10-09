@@ -250,7 +250,12 @@ void CHL2MP_Player::Precache( void )
 	for ( i = 0; i < nHeads; ++i )
 	   	 PrecacheModel( g_ppszRandomCombineModels[i] );
 
+	PrecacheModel( KART_DEFAULT_MODEL );
 	PrecacheModel( KART_PLACEHOLDER_MODEL );
+	if ( kart_model.GetString()[0] )
+	{
+		PrecacheModel( kart_model.GetString() );
+	}
 
 	PrecacheFootStepSounds();
 
@@ -408,7 +413,7 @@ void CHL2MP_Player::Spawn(void)
 	// A respawn keeps its team and so its model: re-apply the model whenever it
 	// doesn't match the mode we just latched (kart_enabled was toggled, then kill).
 	const char *pszModel = modelinfo->GetModelName( GetModel() );
-	bool bHasKartModel = pszModel && !Q_stricmp( pszModel, KART_PLACEHOLDER_MODEL );
+	bool bHasKartModel = pszModel && !Q_stricmp( pszModel, GetKartModelName() );
 	if ( IsInKart() != bHasKartModel )
 	{
 		if ( HL2MPRules()->IsTeamplay() )
@@ -693,12 +698,31 @@ void CHL2MP_Player::SetupPlayerSoundsByModel( const char *pModelName )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: The model kart_model names, or KART_DEFAULT_MODEL when that one wasn't
+//			precached at map start (a model can't be precached later).
+//-----------------------------------------------------------------------------
+const char *CHL2MP_Player::GetKartModelName( void )
+{
+	const char *pszModel = kart_model.GetString();
+	if ( pszModel[0] && modelinfo->GetModelIndex( pszModel ) >= 0 )
+		return pszModel;
+
+	static char s_szWarned[MAX_PATH];
+	if ( Q_stricmp( s_szWarned, pszModel ) )
+	{
+		Q_strncpy( s_szWarned, pszModel, sizeof( s_szWarned ) );
+		Warning( "kart_model \"%s\" is not precached (set it before the map loads); using %s\n", pszModel, KART_DEFAULT_MODEL );
+	}
+	return KART_DEFAULT_MODEL;
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Kart mode replacement for SetPlayerModel()/SetPlayerTeamModel():
-//			the placeholder kart model with the kart hull and no animation.
+//			the kart_model with the kart hull and no animation.
 //-----------------------------------------------------------------------------
 void CHL2MP_Player::SetKartModel( void )
 {
-	SetModel( KART_PLACEHOLDER_MODEL );
+	SetModel( GetKartModelName() );
 	m_iPlayerSoundType = (int)PLAYER_SOUNDS_CITIZEN;
 	SetCollisionBounds( KART_HULL_MIN, KART_HULL_MAX );
 	ResetSequence( 0 );

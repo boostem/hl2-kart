@@ -29,7 +29,8 @@ How to build a kart track in Hammer (Windows).
 
 - A lap takes 60-90 seconds.
 - Exactly one `kart_race_manager` and one `kart_finish`.
-- 8 `kart_start` slots in a 2x4 grid, 96 units apart, facing the track direction, with `grid` 0-7.
+- 8 `kart_start` slots in a 2x4 grid, facing the track direction, with `grid` 0-7: 96 units apart across the track
+  and 128 apart along it (the kart model is 112 x 70; its collision hull is 64 x 64 x 48).
 - The grid sits just behind the `kart_finish`, clear of its trigger: lap 1 starts when a kart crosses the line after GO.
 - Checkpoints about every 1500 units, plus one before and one after every shortcut, so a shortcut cannot skip a checkpoint.
 - Checkpoint and finish triggers span the whole track width, wall to wall, and are tall, so karts cannot jump over them.

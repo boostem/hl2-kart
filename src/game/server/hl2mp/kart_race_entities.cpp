@@ -16,7 +16,7 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
-ConVar kart_debug_server( "kart_debug_server", "0", 0, "1: draw kart race checkpoints, the finish line and grid slots with debug overlays, and log checkpoint touches. 2: also draw the bots' racing line." );
+ConVar kart_debug_server( "kart_debug_server", "0", 0, "1: draw kart race checkpoints, the finish line, grid slots and each kart model's attachments with debug overlays, and log checkpoint touches. 2: also draw the bots' racing line." );
 
 // How often the debug overlays are redrawn, in seconds.
 #define KART_DEBUG_DRAW_INTERVAL	0.25f
@@ -828,6 +828,8 @@ private:
 			NDebugOverlay::EntityTextAtPosition( pStart->GetAbsOrigin() + Vector( 0, 0, KART_HULL_MAX.z ), 0, szText, flDuration );
 		}
 
+		DrawKartAttachments( flDuration );
+
 		CKartRaceManager *pManager = KartRaceManager();
 		if ( !pManager )
 			return;
@@ -857,6 +859,51 @@ private:
 			Q_snprintf( szText, sizeof( szText ), "P%d  lap %d/%d  next %d  %.3f%s", pPlayer->GetKartRacePosition(), pPlayer->GetKartLap(), pManager->GetLaps(),
 				pPlayer->GetKartNextCheckpoint(), pPlayer->GetKartProgress(), pPlayer->IsKartFinished() ? "  finished" : "" );
 			NDebugOverlay::EntityTextAtPosition( pPlayer->GetAbsOrigin() + Vector( 0, 0, KART_HULL_MAX.z + 16.0f ), 0, szText, flDuration );
+		}
+	}
+
+	// Each kart model's attachments (see kart_shareddefs.h): a short axis cross
+	// (red forward, green left, blue up) and the name. Missing ones are listed
+	// above the kart in red.
+	void DrawKartAttachments( float flDuration )
+	{
+		static const char *s_pszAttachments[] =
+		{
+			"wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr", "exhaust", "vehicle_driver_eyes", "item_hold",
+		};
+
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CHL2MP_Player *pPlayer = ToHL2MPPlayer( UTIL_PlayerByIndex( i ) );
+			if ( !pPlayer || !pPlayer->IsInKart() || !pPlayer->IsAlive() )
+				continue;
+
+			char szMissing[128] = "";
+			for ( int j = 0; j < ARRAYSIZE( s_pszAttachments ); j++ )
+			{
+				Vector vecOrigin, vecForward, vecRight, vecUp;
+				QAngle angAttachment;
+				int iAttachment = pPlayer->LookupAttachment( s_pszAttachments[j] );
+				if ( iAttachment <= 0 || !pPlayer->GetAttachment( iAttachment, vecOrigin, angAttachment ) )
+				{
+					Q_strncat( szMissing, " ", sizeof( szMissing ) );
+					Q_strncat( szMissing, s_pszAttachments[j], sizeof( szMissing ) );
+					continue;
+				}
+
+				AngleVectors( angAttachment, &vecForward, &vecRight, &vecUp );
+				NDebugOverlay::Line( vecOrigin, vecOrigin + vecForward * 8.0f, 255, 0, 0, true, flDuration );
+				NDebugOverlay::Line( vecOrigin, vecOrigin - vecRight * 8.0f, 0, 255, 0, true, flDuration );
+				NDebugOverlay::Line( vecOrigin, vecOrigin + vecUp * 8.0f, 0, 0, 255, true, flDuration );
+				NDebugOverlay::Text( vecOrigin, s_pszAttachments[j], false, flDuration );
+			}
+
+			if ( szMissing[0] )
+			{
+				char szText[160];
+				Q_snprintf( szText, sizeof( szText ), "missing attachments:%s", szMissing );
+				NDebugOverlay::EntityTextAtPosition( pPlayer->GetAbsOrigin() + Vector( 0, 0, KART_HULL_MAX.z + 32.0f ), 0, szText, flDuration, 255, 64, 64, 255 );
+			}
 		}
 	}
 
