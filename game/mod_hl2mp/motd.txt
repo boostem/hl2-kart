@@ -1,0 +1,7 @@
+Welcome to HL2 Kart!
+
+W/S: throttle and brake. A/D: steer.
+Jump: hop. Hold jump while turning to drift; release for a mini-turbo.
+Secondary attack (right mouse): use your item. kart_respawn in the console puts you back on the track.
+
+Races start when the grid fills. Have fun.
