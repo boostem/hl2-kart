@@ -1,0 +1,36 @@
+// Tools-only game directory for running the Windows SDK compilers (studiomdl, vtex, ...) under wine.
+// NOT the mod's gameinfo and never loaded by the game: that is game/mod_hl2mp/gameinfo.txt.
+//
+// Under wine without Steam, |appid_243750| search paths cannot resolve, so this file points at the
+// mod and at the Linux SDK install by absolute Z:\ path (wine maps Z: to /). The SDK path below is the
+// default SDK2013_LINUX from tools/wine/env.sh; if yours differs, env.sh writes a copy with your path
+// and passes that to the tools instead. The mod path is relative to this file.
+// studiomdl writes models to <this dir>/models, so models/ and materials/ here are symlinks into the mod.
+"GameInfo"
+{
+	game	"HL2 Kart tools"
+	title	"HL2 Kart tools"
+	type multiplayer_only
+
+	FileSystem
+	{
+		SteamAppId				243750
+
+		SearchPaths
+		{
+			// The mod first: compiled models and materials are written there.
+			mod+mod_write+game+game_write+default_write_path	"|gameinfo_path|..\..\..\game\mod_hl2mp"
+
+			game	"Z:\home\boostem\.local\share\Steam\steamapps\common\Source SDK Base 2013 Multiplayer\hl2mp\hl2mp_pak.vpk"
+			game	"Z:\home\boostem\.local\share\Steam\steamapps\common\Source SDK Base 2013 Multiplayer\hl2_complete\hl2_complete_misc.vpk"
+			game	"Z:\home\boostem\.local\share\Steam\steamapps\common\Source SDK Base 2013 Multiplayer\hl2\hl2_textures.vpk"
+			game	"Z:\home\boostem\.local\share\Steam\steamapps\common\Source SDK Base 2013 Multiplayer\hl2\hl2_misc.vpk"
+			platform	"Z:\home\boostem\.local\share\Steam\steamapps\common\Source SDK Base 2013 Multiplayer\platform\platform_misc.vpk"
+
+			game	"Z:\home\boostem\.local\share\Steam\steamapps\common\Source SDK Base 2013 Multiplayer\hl2mp"
+			game	"Z:\home\boostem\.local\share\Steam\steamapps\common\Source SDK Base 2013 Multiplayer\hl2_complete"
+			game	"Z:\home\boostem\.local\share\Steam\steamapps\common\Source SDK Base 2013 Multiplayer\hl2"
+			platform	"Z:\home\boostem\.local\share\Steam\steamapps\common\Source SDK Base 2013 Multiplayer\platform"
+		}
+	}
+}

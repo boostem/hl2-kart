@@ -523,3 +523,7 @@ game/*/downloadlists/
 # Python venv for tools/
 tools/venv/
 __pycache__/
+
+# studiomdl also writes software and DX8 meshes; SDK 2013 MP only loads .dx90.vtx
+game/mod_hl2mp/models/**/*.sw.vtx
+game/mod_hl2mp/models/**/*.dx80.vtx
