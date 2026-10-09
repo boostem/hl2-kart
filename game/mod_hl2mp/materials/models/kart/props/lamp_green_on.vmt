@@ -1,0 +1,6 @@
+"UnlitGeneric"
+{
+	"$basetexture" "models/kart/props/lamp_green_on"
+	"$model" "1"
+	"$surfaceprop" "glass"
+}

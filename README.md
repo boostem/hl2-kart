@@ -40,6 +40,30 @@ exec kart_tuning      // reload tuning from cfg/kart_tuning.cfg
 Report findings in a comment on the ticket, with numbers (the overlay rows) and screenshots.
 If karts misbehave, `kart_enabled 0; kill` respawns you as a normal HL2DM player.
 
+## Dedicated server
+
+The server runs headless from the Source SDK Base 2013 Dedicated Server (Steam app 244310). The Multiplayer
+install has a `srcds_linux64` too, but not the server libraries it loads. Install it once:
+
+```sh
+steamcmd +login anonymous +app_update 244310 validate +quit
+```
+
+Build the mod, then:
+
+```sh
+game/run_server.sh                     # kart_arena, 12 players, port 27015
+KART_MAP=kart_arena KART_MAXPLAYERS=8 game/run_server.sh +rcon_password secret
+```
+
+`run_server.sh` finds the install in the Steam libraries (or `SRCDS_DIR`), points `-game` at `game/mod_hl2mp`
+and passes extra arguments on to `srcds_linux64`. Clients connect with `connect <host>` (`connect localhost` on
+the same machine).
+
+Settings are in `game/mod_hl2mp/cfg/`: `server.cfg` (hostname, `kart_laps`, `kart_races_per_map`,
+`kart_bot_quota`, `sv_pure`, rates), `mapcycle.txt` and `kart_tuning.cfg`. The welcome text is
+`game/mod_hl2mp/motd.txt`. `kart_bot_add` and `kart_bot_kick` work from the server console or over rcon.
+
 ## Asset policy
 
 - Use existing Source content first, referenced by path. Never copy Valve files into the repo.

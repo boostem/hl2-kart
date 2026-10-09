@@ -217,6 +217,7 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartBoostEndTime = 0.0f;
 	m_flKartBoostScale = 1.0f;
 	m_vecKartGroundNormal.Init( 0.0f, 0.0f, 1.0f );
+	m_flKartTopSpeedScale = 1.0f;
 	m_flKartRespawnUnfreezeTime = 0.0f;
 	m_flKartNextRespawnCommand = 0.0f;
 

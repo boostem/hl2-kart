@@ -54,6 +54,7 @@ ConVar cl_kart_driver_seat( "cl_kart_driver_seat", "-7 0 25", FCVAR_ARCHIVE, "Wh
 ConVar cl_kart_driver_feet( "cl_kart_driver_feet", "24 6 12", FCVAR_ARCHIVE, "Where the driver's feet rest, in kart model space; y is mirrored for the right foot." );
 ConVar cl_kart_driver_tilt( "cl_kart_driver_tilt", "5", FCVAR_ARCHIVE, "Degrees the driver's upper body leans forward towards the steering wheel." );
 ConVar cl_kart_driver_lean( "cl_kart_driver_lean", "10", FCVAR_ARCHIVE, "Degrees the driver's upper body leans into a full turn." );
+ConVar cl_kart_driver_look( "cl_kart_driver_look", "30", FCVAR_ARCHIVE, "Degrees the driver's head turns to look into a turn." );
 ConVar cl_kart_steer_drift_counter( "cl_kart_steer_drift_counter", "0.15 0.5 0.9", FCVAR_ARCHIVE, "Counter-steer in a drift as a fraction of cl_kart_steer_angle: steering into the drift, no steer, steering against it." );
 ConVar kart_cam_min_dist( "kart_cam_min_dist", "80", FCVAR_ARCHIVE, "Hide the local kart when a wall pulls the chase camera closer than this to it." );
 ConVar kart_boost_fov_kick( "kart_boost_fov_kick", "12", FCVAR_ARCHIVE, "Degrees the kart chase camera's field of view widens while boosting." );
@@ -264,6 +265,7 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_nKartDriverModel = -1;
 	m_pKartDriver = NULL;
 	m_flKartDriverLean = 0.0f;
+	m_flKartDriverLook = 0.0f;
 	m_iKartBoneSteerFR = -1;
 	m_iKartBoneSteeringWheel = -1;
 
@@ -532,6 +534,15 @@ void C_HL2MP_Player::DrawKartDebugOverlay( void )
 	DebugRow( "steer", "%d (D=+1, A=-1)", nSteer );
 	DebugRow( "pred errors", "set cl_showerror 1 to log them" );
 
+	// Drift and boost state
+	DebugRow( "drifting", "%s", m_nKartDriftDir > 0 ? "right" : ( m_nKartDriftDir < 0 ? "left" : "no" ) );
+	DebugRow( "slip angle", "%.1f", m_flKartSlipAngle );
+	DebugRow( "drift time", "%.2f", m_flKartDriftTime );
+	DebugRow( "charge/tier", "%.2f / %d", m_flKartDriftCharge, m_nKartDriftTier );
+	DebugRow( "boost left", "%.2f", MAX( 0.0f, m_flKartBoostEndTime - gpGlobals->curtime ) );
+	DebugRow( "boost scale", "%.2f", IsKartBoosting() ? m_flKartBoostScale : 1.0f );
+	DebugRow( "hop airtime", "%.2f", m_flKartHopTime );
+
 	// Race state
 	CHL2MPRules *pRules = HL2MPRules();
 	int nLaps = pRules ? pRules->GetKartLaps() : 0;
@@ -666,9 +677,11 @@ static Vector KartConVarVector( const ConVar &var )
 //			HL2MP's models (citizens and combine, all on the ValveBiped
 //			skeleton) have no seated animation, so the idle pose is posed in
 //			code: moved onto the seat, the upper body tilted towards the
-//			steering wheel and leaning into turns, then the legs reach for the
-//			pedals and the hands for the kart's grip_l/grip_r attachments,
-//			which turn with the steering wheel.
+//			steering wheel and leaning into turns, the head looking into
+//			them, then the legs reach for the pedals and the hands for the
+//			kart's grip_l/grip_r attachments, which turn with the steering
+//			wheel. The models' head_yaw pose parameter would need a sequence
+//			with a head_rot autolayer, which the reference pose lacks.
 //-----------------------------------------------------------------------------
 enum
 {
@@ -683,7 +696,7 @@ class C_KartDriver : public C_BaseAnimating
 {
 	DECLARE_CLASS( C_KartDriver, C_BaseAnimating );
 public:
-	explicit C_KartDriver( C_HL2MP_Player *pKart ) : m_pKart( pKart ), m_iPelvis( -1 ), m_iSpine( -1 ) {}
+	explicit C_KartDriver( C_HL2MP_Player *pKart ) : m_pKart( pKart ), m_iPelvis( -1 ), m_iSpine( -1 ), m_iHead( -1 ) {}
 
 	virtual CStudioHdr *OnNewModel( void ) OVERRIDE;
 	virtual bool ShouldDraw( void ) OVERRIDE;
@@ -694,6 +707,7 @@ private:
 	C_HL2MP_Player *m_pKart;	// owns this entity and removes it before it goes
 	int		m_iPelvis;
 	int		m_iSpine;
+	int		m_iHead;	// -1 when the model lacks one: the head then stays put
 	int		m_iLimb[KART_DRIVER_LIMBS][3];	// thigh, calf, foot / upper arm, forearm, hand; -1 when the model lacks one
 };
 
@@ -710,6 +724,7 @@ CStudioHdr *C_KartDriver::OnNewModel( void )
 	};
 	m_iPelvis = LookupBone( "ValveBiped.Bip01_Pelvis" );
 	m_iSpine = LookupBone( "ValveBiped.Bip01_Spine" );
+	m_iHead = LookupBone( "ValveBiped.Bip01_Head1" );
 	for ( int i = 0; i < KART_DRIVER_LIMBS; ++i )
 	{
 		for ( int j = 0; j < 3; ++j )
@@ -806,6 +821,33 @@ void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Qu
 		}
 	}
 
+	// The head (and anything on it) turns about the upper body's up axis to
+	// look into the turn. Positive turns about up are to the left.
+	if ( m_iHead >= 0 && ( pStudioHdr->boneFlags( m_iHead ) & boneMask ) )
+	{
+		Vector vecUpperUp, vecHead;
+		VectorRotate( vecUp, matUpper, vecUpperUp );
+		MatrixPosition( pBones[m_iHead], vecHead );
+		matrix3x4_t matLook;
+		MatrixBuildRotationAboutAxis( vecUpperUp, -m_pKart->GetKartDriverLook() * cl_kart_driver_look.GetFloat(), matLook );
+		Vector vecPivot;
+		VectorRotate( vecHead, matLook, vecPivot );
+		MatrixSetColumn( vecHead - vecPivot, 3, matLook );
+
+		bool bHead[MAXSTUDIOBONES];
+		for ( int i = 0; i < nBones; ++i )
+		{
+			int iParent = pStudioHdr->boneParent( i );
+			bHead[i] = ( i == m_iHead ) || ( iParent >= 0 && bHead[iParent] );
+			if ( bHead[i] )
+			{
+				matrix3x4_t matOld;
+				MatrixCopy( pBones[i], matOld );
+				ConcatTransforms( matLook, matOld, pBones[i] );
+			}
+		}
+	}
+
 	matrix3x4_t matBefore[MAXSTUDIOBONES];
 	memcpy( matBefore, pBones, nBones * sizeof( matrix3x4_t ) );
 
@@ -861,6 +903,7 @@ void C_KartDriver::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Qu
 //			server has picked a model, replaced when the model changes, gone
 //			with the kart. Eases the lean towards the turn, which grows with
 //			speed: into the drift while drifting, else the way it is steering.
+//			The head looks the same way at any speed.
 //-----------------------------------------------------------------------------
 void C_HL2MP_Player::UpdateKartDriver( void )
 {
@@ -870,6 +913,7 @@ void C_HL2MP_Player::UpdateKartDriver( void )
 	{
 		RemoveKartDriver();
 		m_flKartDriverLean = 0.0f;
+		m_flKartDriverLook = 0.0f;
 		return;
 	}
 
@@ -877,6 +921,7 @@ void C_HL2MP_Player::UpdateKartDriver( void )
 	float flTarget = flTurn * RemapValClamped( fabs( m_flKartSpeed ), 0.0f, KartEngineMaxSpeed() * 0.5f, 0.0f, 1.0f );
 	float flBlend = clamp( gpGlobals->frametime * cl_kart_steer_speed.GetFloat() * 0.5f, 0.0f, 1.0f );
 	m_flKartDriverLean += ( flTarget - m_flKartDriverLean ) * flBlend;
+	m_flKartDriverLook += ( flTurn - m_flKartDriverLook ) * flBlend;
 
 	if ( m_pKartDriver && m_pKartDriver->GetModel() != pModel )
 	{

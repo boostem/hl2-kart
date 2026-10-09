@@ -1,0 +1,5 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/kart/props/tire_wall_corner"
+	"$surfaceprop" "rubbertire"
+}

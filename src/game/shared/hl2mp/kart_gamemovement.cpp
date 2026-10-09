@@ -194,7 +194,7 @@ void CKartGameMovement::KartMove( void )
 	// KartUpdateSpeed brings the speed back down to top speed.
 	if ( pKart->IsKartBoosting() )
 	{
-		flSpeed = MAX( flSpeed, kart_max_speed.GetFloat() * pKart->m_flKartBoostScale );
+		flSpeed = MAX( flSpeed, kart_max_speed.GetFloat() * pKart->GetKartTopSpeedScale() * pKart->m_flKartBoostScale );
 	}
 
 	// Heading: positive yaw is left, so D (positive sidemove) decreases yaw.
@@ -452,12 +452,14 @@ void CKartGameMovement::KartReleaseTurbo( int nTier )
 //			Signed: negative is reversing. Also runs the reverse delay timer.
 //			Above top speed (a boost just ended) it slows back down to it at
 //			kart_boost_decay whatever the throttle, or harder when braking.
+//			Top speed is kart_max_speed times the kart's top speed scale (kart
+//			bots' difficulty and rubber-banding).
 //-----------------------------------------------------------------------------
 float CKartGameMovement::KartUpdateSpeed( float flSpeed, float flThrottle, float flFrametime )
 {
 	CHL2MP_Player *pKart = GetKartPlayer();
 
-	const float flMaxSpeed = kart_max_speed.GetFloat();
+	const float flMaxSpeed = kart_max_speed.GetFloat() * pKart->GetKartTopSpeedScale();
 	if ( flSpeed > flMaxSpeed )
 	{
 		pKart->m_flKartReverseTime = 0.0f;
