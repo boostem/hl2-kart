@@ -39,6 +39,10 @@ ConVar kart_cam_height( "kart_cam_height", "70", FCVAR_ARCHIVE, "Kart chase came
 ConVar kart_cam_target_height( "kart_cam_target_height", "30", FCVAR_ARCHIVE, "Height of the chase camera's look-at point above the kart origin." );
 ConVar kart_cam_follow( "kart_cam_follow", "6", FCVAR_ARCHIVE, "How quickly the chase camera swings in behind the kart in turns. Higher is stiffer." );
 ConVar kart_cam_fov( "kart_cam_fov", "95", FCVAR_ARCHIVE, "Kart chase camera field of view." );
+ConVar cl_kart_steer_angle( "cl_kart_steer_angle", "25", FCVAR_ARCHIVE, "Kart front wheel steering lock at low speed, in degrees. It shrinks with the turn rate at speed." );
+ConVar cl_kart_steer_ratio( "cl_kart_steer_ratio", "3", FCVAR_ARCHIVE, "Kart steering ratio: degrees the steering wheel turns per degree of the front wheels." );
+ConVar cl_kart_steer_speed( "cl_kart_steer_speed", "10", FCVAR_ARCHIVE, "How quickly the kart's drawn steering follows the input. Higher is snappier." );
+ConVar cl_kart_steer_drift_counter( "cl_kart_steer_drift_counter", "0.15 0.5 0.9", FCVAR_ARCHIVE, "Counter-steer in a drift as a fraction of cl_kart_steer_angle: steering into the drift, no steer, steering against it." );
 ConVar kart_cam_min_dist( "kart_cam_min_dist", "80", FCVAR_ARCHIVE, "Hide the local kart when a wall pulls the chase camera closer than this to it." );
 
 LINK_ENTITY_TO_CLASS( player, C_HL2MP_Player );
@@ -81,6 +85,7 @@ IMPLEMENT_CLIENTCLASS_DT(C_HL2MP_Player, DT_HL2MP_Player, CHL2MP_Player)
 	RecvPropInt( RECVINFO( m_iPlayerSoundType) ),
 	RecvPropBool( RECVINFO( m_bKartMode ) ),
 	RecvPropInt( RECVINFO( m_nKartDriftDir ) ),
+	RecvPropInt( RECVINFO( m_nKartSteer ) ),
 
 	RecvPropInt( RECVINFO( m_nKartLap ) ),
 	RecvPropInt( RECVINFO( m_nKartNextCheckpoint ) ),
@@ -109,6 +114,7 @@ BEGIN_PREDICTION_DATA( C_HL2MP_Player )
 	DEFINE_PRED_FIELD_TOL( m_flKartReverseTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
 	DEFINE_PRED_FIELD_TOL( m_flKartBumpCooldown, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
 	DEFINE_PRED_FIELD( m_nKartDriftDir, FIELD_INTEGER, FTYPEDESC_INSENDTABLE ),
+	DEFINE_PRED_FIELD( m_nKartSteer, FIELD_INTEGER, FTYPEDESC_INSENDTABLE ),
 	DEFINE_PRED_FIELD_TOL( m_flKartSlipAngle, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.125f ),
 	DEFINE_PRED_FIELD_TOL( m_flKartDriftTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
 	DEFINE_PRED_FIELD_TOL( m_flKartHopTime, FIELD_FLOAT, FTYPEDESC_INSENDTABLE, 0.001f ),
@@ -167,6 +173,7 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_flKartReverseTime = 0.0f;
 	m_flKartBumpCooldown = 0.0f;
 	m_nKartDriftDir = 0;
+	m_nKartSteer = 0;
 	m_flKartSlipAngle = 0.0f;
 	m_flKartDriftTime = 0.0f;
 	m_flKartHopTime = 0.0f;
@@ -194,6 +201,11 @@ C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles(
 	m_flKartCamYaw = 0.0f;
 	m_bKartCamActive = false;
 	m_bKartCamTooClose = false;
+
+	m_flKartSteerAngle = 0.0f;
+	m_iKartBoneSteerFL = -1;
+	m_iKartBoneSteerFR = -1;
+	m_iKartBoneSteeringWheel = -1;
 
 	AddVar( &m_angEyeAngles, &m_iv_angEyeAngles, LATCH_SIMULATION_VAR );
 
@@ -309,6 +321,11 @@ CStudioHdr *C_HL2MP_Player::OnNewModel( void )
 	
 	Initialize( );
 
+	// Karts built with steering bones (assets_src/kart_racer); others stay rigid.
+	m_iKartBoneSteerFL = LookupBone( "steer_fl" );
+	m_iKartBoneSteerFR = LookupBone( "steer_fr" );
+	m_iKartBoneSteeringWheel = LookupBone( "steering_wheel" );
+
 	return hdr;
 }
 
@@ -409,6 +426,7 @@ void C_HL2MP_Player::ClientThink( void )
 	UpdateIDTarget();
 
 	UpdateKartSounds();
+	UpdateKartSteering();
 }
 
 // Top speed the engine pitch is mapped to: the replicated movement convar
@@ -417,6 +435,93 @@ static float KartEngineMaxSpeed( void )
 {
 	float flMaxSpeed = kart_max_speed.GetFloat();
 	return ( flMaxSpeed > 0.0f ) ? flMaxSpeed : 650.0f;
+}
+
+// Racer kart axle geometry, for the Ackermann angles of the front wheels
+// (assets_src/kart_racer/build_kart_racer.py: FRONT and REAR).
+#define KART_STEER_WHEELBASE	72.0f
+#define KART_STEER_TRACK		54.0f
+
+//-----------------------------------------------------------------------------
+// Purpose: Eases the drawn steering angle towards the steer input. The lock
+//			shrinks with the turn rate at speed, as the kart turns less there.
+//			In a drift the front wheels counter-steer, pointing out of the
+//			turn along the slide: least when steering into the drift (the
+//			tightest line), most when steering against it (the widest).
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::UpdateKartSteering( void )
+{
+	if ( !IsInKart() || !IsAlive() || IsDormant() )
+	{
+		m_flKartSteerAngle = 0.0f;
+		return;
+	}
+
+	const float flLock = cl_kart_steer_angle.GetFloat();
+	float flTarget;
+	if ( m_nKartDriftDir != 0 )
+	{
+		float flInto = 0.15f, flNone = 0.5f, flAgainst = 0.9f;
+		sscanf( cl_kart_steer_drift_counter.GetString(), "%f %f %f", &flInto, &flNone, &flAgainst );
+		float flCounter = flNone;
+		if ( m_nKartSteer == m_nKartDriftDir )
+		{
+			flCounter = flInto;
+		}
+		else if ( m_nKartSteer != 0 )
+		{
+			flCounter = flAgainst;
+		}
+		flTarget = -m_nKartDriftDir * flCounter * flLock;
+	}
+	else
+	{
+		float flLow = MAX( kart_turn_rate_low.GetFloat(), 1.0f );
+		float flSpeedScale = RemapValClamped( fabs( m_flKartSpeed ) / KartEngineMaxSpeed(), 0.0f, 1.0f, 1.0f, kart_turn_rate_high.GetFloat() / flLow );
+		flTarget = m_nKartSteer * flLock * flSpeedScale;
+	}
+
+	float flBlend = clamp( gpGlobals->frametime * cl_kart_steer_speed.GetFloat(), 0.0f, 1.0f );
+	m_flKartSteerAngle += ( flTarget - m_flKartSteerAngle ) * flBlend;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Turns the steering bones about their local Z (up through each front
+//			wheel, along the steering column) by the drawn steering angle. The
+//			front wheels follow Ackermann geometry, the inner one turning more.
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed )
+{
+	BaseClass::BuildTransformations( pStudioHdr, pos, q, cameraTransform, boneMask, boneComputed );
+
+	if ( !IsInKart() || fabs( m_flKartSteerAngle ) < 0.01f )
+		return;
+
+	// Positive steer is right: a negative turn about an up axis.
+	const float flAngle = m_flKartSteerAngle;
+	const float flRadius = KART_STEER_WHEELBASE / tanf( DEG2RAD( fabs( flAngle ) ) );
+	const float flInner = RAD2DEG( atanf( KART_STEER_WHEELBASE / MAX( flRadius - KART_STEER_TRACK * 0.5f, 1.0f ) ) );
+	const float flOuter = RAD2DEG( atanf( KART_STEER_WHEELBASE / ( flRadius + KART_STEER_TRACK * 0.5f ) ) );
+	const bool bRight = ( flAngle > 0.0f );
+	const float flSign = bRight ? -1.0f : 1.0f;
+
+	const struct { int iBone; float flTurn; } turns[] =
+	{
+		{ m_iKartBoneSteerFL, flSign * ( bRight ? flOuter : flInner ) },
+		{ m_iKartBoneSteerFR, flSign * ( bRight ? flInner : flOuter ) },
+		{ m_iKartBoneSteeringWheel, -flAngle * cl_kart_steer_ratio.GetFloat() },
+	};
+	for ( int i = 0; i < ARRAYSIZE( turns ); ++i )
+	{
+		int iBone = turns[i].iBone;
+		if ( iBone < 0 || iBone >= pStudioHdr->numbones() || !( pStudioHdr->boneFlags( iBone ) & boneMask ) )
+			continue;
+
+		matrix3x4_t matTurn, matOld;
+		AngleMatrix( QAngle( 0.0f, turns[i].flTurn, 0.0f ), matTurn );	// yaw: about local Z
+		MatrixCopy( GetBone( iBone ), matOld );
+		ConcatTransforms( matOld, matTurn, GetBoneForWrite( iBone ) );
+	}
 }
 
 //-----------------------------------------------------------------------------

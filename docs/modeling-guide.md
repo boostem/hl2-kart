@@ -63,7 +63,12 @@ Attach the PNGs to the ticket; don't commit them.
 - `assets_src/kart_racer/`: the racer kart (`models/kart/kart_racer.mdl`), the default `kart_model`: a cartoon racer
   go-kart with a rounded tub, wide bumpers, fat tyres, a rear engine with twin pipes and a wing. About 123 x 71 x 43,
   ~5100 triangles, near-white paint so `cl_kart_color` tints it. Same attachments, texture bake and build steps as
-  the scrap kart below, with `kart_racer` for `kart_scrap`.
+  the scrap kart below, with `kart_racer` for `kart_scrap`. It also has steering bones: `steer_fl` and `steer_fr`
+  (pivoting up through each front wheel) and `steering_wheel` (along the column), each turning about its local Z.
+  The client turns them as the kart steers (`C_HL2MP_Player::BuildTransformations`). The front wheels use Ackermann
+  angles, the steering wheel follows at `cl_kart_steer_ratio`, and in a drift the wheels counter-steer. Attachments
+  `grip_l` and `grip_r` on the steering wheel rim are where the driver's hands go. Tuning: `cl_kart_steer_angle`,
+  `cl_kart_steer_speed`, `cl_kart_steer_drift_counter`. A model without these bones stays rigid.
 - `assets_src/kart_scrap/`: the scrap kart (`models/kart/kart_scrap.mdl`), the earlier default, still available as
   `kart_model models/kart/kart_scrap.mdl`. About 112 x 70 x 50, ~3300 triangles, one 512 texture baked from procedural materials and AO in Cycles. Attachments `wheel_fl`,
   `wheel_fr`, `wheel_rl`, `wheel_rr` (tyre contact patches on the floor), `exhaust` (pointing out of the pipe),

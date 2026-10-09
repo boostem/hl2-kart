@@ -12,6 +12,10 @@ with Blender Source Tools and writes kart_racer.qc. img2vtf.py overwrites the VM
 A low rounded tub, a wide front bumper, fat tyres (bigger at the back), side pods, a high-backed seat and a rear
 engine with twin pipes and a little wing. The body paint is near white so cl_kart_color tints it.
 
+The front wheels and the steering wheel have their own bones (steer_fl, steer_fr, steering_wheel), which the client
+turns about their local Z axis as the kart steers (C_HL2MP_Player::BuildTransformations). grip_l and grip_r are on
+the steering wheel rim, where the driver's hands go.
+
 1 unit = 1 inch. About 123 long, 71 wide and 43 tall, facing +X with the origin on the floor, centred.
 """
 import math
@@ -44,6 +48,24 @@ ATTACHMENTS = {
     "exhaust": (tuple(EXHAUST_END), (-15, 180, 0)),
     "vehicle_driver_eyes": ((-8.0, 0.0, 40.0), (0, 0, 0)),
     "item_hold": ((-64.0, 0.0, 22.0), (0, 0, 0)),
+}
+
+# The steering wheel: centre, and its axis (the column, tilted back 55 degrees from vertical towards the driver).
+STEERING_WHEEL = Matrix.Translation((9, 0, 31)) @ Matrix.Rotation(math.radians(-55), 4, "Y")
+
+# Steering bones: name -> (pivot, local Z axis in model space). Their local Z is the axis they turn about: up
+# through the centre of each front wheel, and along the steering column.
+STEER_BONES = {
+    "steer_fl": ((FRONT[0], FRONT[1], FRONT[2]), (0, 0, 1)),
+    "steer_fr": ((FRONT[0], -FRONT[1], FRONT[2]), (0, 0, 1)),
+    "steering_wheel": (tuple(STEERING_WHEEL.translation), tuple(STEERING_WHEEL.to_3x3() @ Vector((0, 0, 1)))),
+}
+
+# Attachments on the steering wheel, in its bone's space (local X points to the top of the wheel, +Y to the
+# driver's left): the hands at ten to two on the rim.
+GRIPS = {
+    "grip_l": ((7.5 * math.cos(math.radians(60)), 7.5 * math.sin(math.radians(60)), 0.0), (0, 0, 0)),
+    "grip_r": ((7.5 * math.cos(math.radians(60)), -7.5 * math.sin(math.radians(60)), 0.0), (0, 0, 0)),
 }
 
 # --- geometry helpers: each finish (paint, steel, ...) is one bmesh, later one object with its bake material ---
@@ -197,7 +219,7 @@ def build_kart():
 
     # steering column and a chunky three-spoke wheel
     tube("steel", (22, 0, 20), (10, 0, 30), 1.1)
-    wheel_m = Matrix.Translation((9, 0, 31)) @ Matrix.Rotation(math.radians(-55), 4, "Y")
+    wheel_m = STEERING_WHEEL
     rim = [(7.5 + 1.3 * math.cos(2 * math.pi * i / 8), 1.3 * math.sin(2 * math.pi * i / 8)) for i in range(9)]
     lathe("rubber", rim, 20, wheel_m)
     for a in (90, 210, 330):
@@ -382,6 +404,64 @@ def bake(ob, image, path):
     image.save()
 
 
+def rig(ob, collection):
+    """Skin the front wheels and the steering wheel to their steering bones, everything else to root. Each part is
+    a separate mesh island, so an island goes to the bone whose part its centre lies in."""
+    arm = bpy.data.armatures.new(NAME + "_skeleton")
+    skel = bpy.data.objects.new(NAME + "_skeleton", arm)
+    collection.objects.link(skel)
+    bpy.context.view_layer.objects.active = skel
+    bpy.ops.object.mode_set(mode="EDIT")
+    root = arm.edit_bones.new("root")
+    root.head, root.tail = (0, 0, 0), (0, 4, 0)
+    for name, (pivot, axis) in STEER_BONES.items():
+        b = arm.edit_bones.new(name)
+        axis = Vector(axis)
+        # the bone points along a direction square to its axis; align_roll then turns its local Z onto the axis
+        b.head = pivot
+        b.tail = Vector(pivot) + 4 * axis.cross(Vector((1, 0, 0))).normalized()
+        b.align_roll(axis)
+        b.parent = root
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    fx, fy, fr, fw = FRONT
+    centre = STEERING_WHEEL.translation
+
+    def bone_for(c):
+        if abs(c.x - fx) < fr and abs(abs(c.y) - fy) < fw / 2 + 1 and c.z < 2 * fr:
+            return "steer_fl" if c.y > 0 else "steer_fr"
+        if (c - centre).length < 6.0:
+            return "steering_wheel"
+        return "root"
+
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    groups = {}
+    seen = set()
+    for v in bm.verts:
+        if v.index in seen:
+            continue
+        island, stack = [], [v]
+        seen.add(v.index)
+        while stack:
+            u = stack.pop()
+            island.append(u.index)
+            for e in u.link_edges:
+                w = e.other_vert(u)
+                if w.index not in seen:
+                    seen.add(w.index)
+                    stack.append(w)
+        c = sum((bm.verts[i].co for i in island), Vector()) / len(island)
+        groups.setdefault(bone_for(c), []).extend(island)
+    bm.free()
+    for name in ["root"] + list(STEER_BONES):
+        ob.vertex_groups.new(name=name).add(groups.get(name, []), 1.0, "REPLACE")
+    ob.parent = skel
+    ob.modifiers.new("skeleton", "ARMATURE").object = skel
+    return {name: len(v) for name, v in groups.items()}
+
+
 def finish_ref(ob):
     """Swap the bake materials for the one SMD material and smooth by angle."""
     ob.data.materials.clear()
@@ -420,6 +500,9 @@ def write_qc(path):
     ]
     for name, (pos, rot) in ATTACHMENTS.items():
         lines.append('$attachment "%s" "root" %g %g %g rigid rotate %g %g %g' % ((name,) + tuple(pos) + rot))
+    lines += ["", "// The driver's hands on the steering wheel, which turns with the steering."]
+    for name, (pos, rot) in GRIPS.items():
+        lines.append('$attachment "%s" "steering_wheel" %g %g %g rigid rotate %g %g %g' % ((name,) + tuple(pos) + rot))
     lines += [
         "",
         '$collisionmodel "kart_racer_phys.smd"',
@@ -448,13 +531,14 @@ def main():
     unwrap(ob)
     bake(ob, image, os.path.join(HERE, NAME + ".png"))
     finish_ref(ob)
+    skinned = rig(ob, ref)
     build_phys(phys)
 
     export_smd(HERE, [ref, phys])
     write_qc(os.path.join(HERE, NAME + ".qc"))
     if "--blend" in sys.argv:
         bpy.ops.wm.save_as_mainfile(filepath=sys.argv[sys.argv.index("--blend") + 1])
-    print("built %s: %d triangles" % (NAME, tris))
+    print("built %s: %d triangles, vertices per bone %s" % (NAME, tris, skinned))
 
 
 main()

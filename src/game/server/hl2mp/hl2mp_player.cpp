@@ -111,6 +111,7 @@ IMPLEMENT_SERVERCLASS_ST(CHL2MP_Player, DT_HL2MP_Player)
 	SendPropInt( SENDINFO( m_iPlayerSoundType), 3 ),
 	SendPropBool( SENDINFO( m_bKartMode ) ),
 	SendPropInt( SENDINFO( m_nKartDriftDir ), 2 ),	// signed: -1, 0, 1. Everyone gets it, for drift effects on other karts.
+	SendPropInt( SENDINFO( m_nKartSteer ), 2 ),	// signed: -1, 0, 1. Everyone gets it, to turn the wheels of other karts.
 
 	// kart race state, for everyone's HUD and the bots
 	SendPropInt( SENDINFO( m_nKartLap ), KART_NET_LAP_BITS, SPROP_UNSIGNED ),
@@ -195,6 +196,7 @@ CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
 	m_flKartReverseTime = 0.0f;
 	m_flKartBumpCooldown = 0.0f;
 	m_nKartDriftDir = 0;
+	m_nKartSteer = 0;
 	m_flKartSlipAngle = 0.0f;
 	m_flKartDriftTime = 0.0f;
 	m_flKartHopTime = 0.0f;
@@ -735,6 +737,7 @@ void CHL2MP_Player::ResetKartMovement( float flYaw )
 	m_flKartReverseTime = 0.0f;
 	m_flKartBumpCooldown = 0.0f;
 	m_nKartDriftDir = 0;
+	m_nKartSteer = 0;
 	m_flKartSlipAngle = 0.0f;
 	m_flKartDriftTime = 0.0f;
 	m_flKartHopTime = 0.0f;

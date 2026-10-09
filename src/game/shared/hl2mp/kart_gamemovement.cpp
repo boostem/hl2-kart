@@ -173,6 +173,8 @@ void CKartGameMovement::KartMove( void )
 		bJumpPressed = bJumpHeld && !( mv->m_nOldButtons & IN_JUMP );
 	}
 
+	pKart->m_nKartSteer = (int)flSteer;	// only drawn: the wheels and steering wheel turn with it
+
 	float flSpeed = KartUpdateSpeed( pKart->m_flKartSpeed, flThrottle, flFrametime );
 
 	KartUpdateHopAndDrift( flSpeed, flSteer, bJumpHeld, bJumpPressed, bOnGround, flFrametime );
